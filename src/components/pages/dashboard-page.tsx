@@ -7,7 +7,7 @@ import { ActionModal } from "@/components/ui/action-modal";
 import { BarList, DonutChart, LineChart } from "@/components/ui/charts";
 import { StatCard } from "@/components/ui/stat-card";
 import { Toast } from "@/components/ui/toast";
-import { api, DashboardOzet, durumTonu, sayiGoster, tarihGoster, yuzde } from "@/lib/api";
+import { api, API_ERISIM_HATASI, DashboardOzet, durumTonu, sayiGoster, tarihGoster, yuzde } from "@/lib/api";
 
 export function DashboardPage() {
   const [action, setAction] = useState("");
@@ -18,7 +18,7 @@ export function DashboardPage() {
   const yukle = useCallback(() => {
     api.get<DashboardOzet>("/api/dashboard")
       .then(v => { setOzet(v); setHata(""); })
-      .catch(() => setHata("Veriler alınamadı. API'nin çalıştığından emin olun (http://localhost:5180)."));
+      .catch(() => setHata(API_ERISIM_HATASI));
   }, []);
 
   useEffect(() => { yukle(); }, [yukle]);

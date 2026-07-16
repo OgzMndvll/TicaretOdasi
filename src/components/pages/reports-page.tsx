@@ -6,7 +6,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { BarList, DonutChart, LineChart } from "@/components/ui/charts";
 import { StatCard } from "@/components/ui/stat-card";
 import { Toast } from "@/components/ui/toast";
-import { api, DashboardOzet, GrupRaporSatiri, sayiGoster, yuzde } from "@/lib/api";
+import { api, API_ERISIM_HATASI, DashboardOzet, GrupRaporSatiri, sayiGoster, yuzde } from "@/lib/api";
 
 export function ReportsPage() {
   const [ozet, setOzet] = useState<DashboardOzet | null>(null);
@@ -16,7 +16,7 @@ export function ReportsPage() {
 
   useEffect(() => {
     api.get<DashboardOzet>("/api/dashboard").then(setOzet)
-      .catch(() => setHata("Veriler alınamadı. API'nin çalıştığından emin olun (http://localhost:5180)."));
+      .catch(() => setHata(API_ERISIM_HATASI));
     api.get<GrupRaporSatiri[]>("/api/raporlar/gruplar").then(setRapor).catch(() => {});
   }, []);
 

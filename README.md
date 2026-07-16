@@ -16,7 +16,16 @@ npm run dev
 npm run build
 ```
 
-Uygulama varsayılan olarak `http://localhost:3000` adresinde çalışır.
+Canlı frontend domaini: `https://courseintellect.com.tr`
+
+Frontend varsayılan API adresi `https://api.courseintellect.com.tr` olarak ayarlıdır.
+Yerel geliştirmede farklı API kullanmak için `.env.local` içine örneğin şunu yazın:
+
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:5180
+```
+
+Uygulama yerelde varsayılan olarak `http://localhost:3000` adresinde çalışır.
 
 ## Backend
 
@@ -33,7 +42,11 @@ dotnet restore backend/EtsoApi/EtsoApi.csproj
 dotnet run --project backend/EtsoApi/EtsoApi.csproj
 ```
 
-API varsayılan olarak `http://localhost:5180` adresinde çalışır.
+Canlı backend/API domaini: `https://api.courseintellect.com.tr`
+
+Backend CORS ayarı `https://courseintellect.com.tr`, `https://www.courseintellect.com.tr` ve yerel geliştirme adreslerini kabul edecek şekilde gelir. Canlı ortamda gerekirse `Cors__Origins__0`, `Cors__Origins__1` şeklinde ortam değişkenleriyle override edilebilir.
+
+API yerelde varsayılan olarak `http://localhost:5180` adresinde çalışır.
 
 ## Güvenlik Notları
 

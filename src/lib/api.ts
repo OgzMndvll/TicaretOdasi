@@ -1,6 +1,7 @@
 import { cikisYap, tokenAl } from "./auth";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5180";
+export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "https://api.courseintellect.com.tr").replace(/\/+$/, "");
+export const API_ERISIM_HATASI = `Veriler alınamadı. API'ye ulaşılamadı (${API_URL}).`;
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
