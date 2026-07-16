@@ -1,0 +1,163 @@
+import { cikisYap, tokenAl } from "./auth";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5180";
+
+export class ApiError extends Error {
+  constructor(public status: number, message: string) { super(message); }
+}
+
+function yetkiBasligi(): Record<string, string> {
+  const token = tokenAl();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/** 401 dönen isteklerde oturum düşmüş demektir: token temizlenip girişe yönlendirilir. */
+function oturumKontrol(res: Response) {
+  if (res.status === 401 && typeof window !== "undefined" && !window.location.pathname.startsWith("/giris")) {
+    cikisYap();
+  }
+}
+
+async function istek<T>(yol: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_URL}${yol}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...yetkiBasligi(), ...options?.headers },
+  });
+  if (!res.ok) {
+    oturumKontrol(res);
+    let mesaj = `İstek başarısız (${res.status})`;
+    try { mesaj = (await res.json())?.mesaj ?? mesaj; } catch { /* gövde JSON değilse varsayılan mesaj kalır */ }
+    if (res.status === 403) mesaj = "Bu işlem için yetkiniz yok (yalnızca Yönetici).";
+    throw new ApiError(res.status, mesaj);
+  }
+  return res.status === 204 ? (undefined as T) : res.json();
+}
+
+export const api = {
+  get: <T>(yol: string) => istek<T>(yol),
+  post: <T>(yol: string, veri: unknown) => istek<T>(yol, { method: "POST", body: JSON.stringify(veri) }),
+  put: <T>(yol: string, veri: unknown) => istek<T>(yol, { method: "PUT", body: JSON.stringify(veri) }),
+  delete: <T>(yol: string) => istek<T>(yol, { method: "DELETE" }),
+
+  /** Dosya yükler (multipart). Content-Type başlığını tarayıcı belirler. */
+  async yukle<T>(yol: string, dosya: File): Promise<T> {
+    const veri = new FormData();
+    veri.append("dosya", dosya);
+    const res = await fetch(`${API_URL}${yol}`, { method: "POST", body: veri, headers: yetkiBasligi() });
+    if (!res.ok) {
+      oturumKontrol(res);
+      let mesaj = `Yükleme başarısız (${res.status})`;
+      try { mesaj = (await res.json())?.mesaj ?? mesaj; } catch { /* gövde JSON değilse varsayılan mesaj kalır */ }
+      if (res.status === 403) mesaj = "Bu işlem için yetkiniz yok (yalnızca Yönetici).";
+      throw new ApiError(res.status, mesaj);
+    }
+    return res.json();
+  },
+
+  /** Sunucudan dosya indirir ve tarayıcıda kaydetme işlemini tetikler. */
+  async indir(yol: string): Promise<void> {
+    const res = await fetch(`${API_URL}${yol}`, { headers: yetkiBasligi() });
+    if (!res.ok) { oturumKontrol(res); throw new ApiError(res.status, `İndirme başarısız (${res.status})`); }
+    const blob = await res.blob();
+    const baslik = res.headers.get("content-disposition") ?? "";
+    const eslesme = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(baslik);
+    const ad = eslesme ? decodeURIComponent(eslesme[1]) : "indirilen-dosya";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = ad;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
+};
+
+export interface IceAktarmaSonucu { eklenen: number; atlanan: number; hatalar: string[] }
+
+// ---- Tipler ----
+
+export interface Sayfali<T> { toplam: number; sayfa: number; sayfaBoyutu: number; kayitlar: T[] }
+
+export interface EsnafKaydi {
+  id: number; adSoyad: string; isletme: string; vergiNo?: string | null;
+  grupId?: number | null; grup?: string | null; il?: string | null; ilce?: string | null; mahalle?: string | null;
+  adres?: string | null; telefon?: string | null; gorevliId?: number | null; gorevli?: string | null;
+  durum: string; sonGorusmeTarihi?: string | null; kayitTarihi: string;
+}
+
+export interface GrupKaydi {
+  id: number; ad: string; aciklama?: string | null; tur: string;
+  ustGrupId?: number | null; ustGrup?: string | null;
+  esnafSayisi: number; aktifGorevli: number; durum: string; guncellemeTarihi: string;
+}
+
+export interface KullaniciKaydi {
+  id: number; adSoyad: string; kullaniciAdi: string; rol: string;
+  gorev?: string | null; birim?: string | null; eposta?: string | null;
+  telefon?: string | null; durum: string;
+}
+
+export interface GorusmeKaydi {
+  id: number; tarih: string; sonuc: string; not?: string | null; takipGerekli: boolean;
+  esnafId: number; esnaf: string; isletme: string; grup?: string | null;
+  ilce?: string | null; mahalle?: string | null; telefon?: string | null; esnafDurum: string;
+  gorevliId: number; gorevli: string;
+}
+
+export interface GorevlendirmeKaydi {
+  id: number; tarih: string; not?: string | null; durum: string;
+  gorevliId: number; gorevli: string;
+  esnafId?: number | null; esnaf?: string | null; isletme?: string | null;
+  ilce?: string | null; mahalle?: string | null; telefon?: string | null;
+  grupId?: number | null; grup?: string | null;
+}
+
+export interface OnayKaydi {
+  id: number; islemTuru: string; tarih: string; durum: string;
+  esnafId: number; esnaf: string; isletme: string; grup?: string | null;
+  ilce?: string | null; mahalle?: string | null; telefon?: string | null;
+  gorevliId?: number | null; gorevli?: string | null;
+}
+
+export interface DashboardOzet {
+  toplamEsnaf: number; gorusulen: number; onayVeren: number; onayVermeyen: number;
+  kararsiz: number; gorusulmemis: number;
+  aylikGorusmeler: { ay: string; adet: number }[];
+  gorevliPerformans: { adSoyad: string; adet: number }[];
+  sonGorusmeler: { id: number; tarih: string; sonuc: string; esnaf: string; isletme: string; grup?: string | null; gorevli: string }[];
+}
+
+export interface GrupRaporSatiri {
+  id: number; ad: string; toplamEsnaf: number; gorusme: number;
+  onaylayan: number; reddedilen: number; kararsiz: number; gorusulmeyen: number; onayOrani: number;
+}
+
+// ---- Yardımcılar ----
+
+export type StatusTone = "success" | "danger" | "warning" | "neutral" | "info" | "gray";
+
+export function durumTonu(durum: string): StatusTone {
+  switch (durum) {
+    case "Onay Verdi": case "Onaylandı": case "Aktif": case "Tamamlandı": return "success";
+    case "Onay Vermedi": case "Reddedildi": case "İptal Edildi": return "danger";
+    case "Kararsız": case "Bekliyor": case "Bekleyen": return "warning";
+    case "Görüşülmedi": case "Pasif": return "neutral";
+    default: return "info";
+  }
+}
+
+export function tarihGoster(iso?: string | null): string {
+  if (!iso) return "-";
+  const t = new Date(iso);
+  return t.toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+export function sayiGoster(n: number): string {
+  return n.toLocaleString("tr-TR");
+}
+
+export function yuzde(pay: number, payda: number): string {
+  if (!payda) return "%0";
+  return `%${((pay * 100) / payda).toLocaleString("tr-TR", { maximumFractionDigits: 1 })}`;
+}

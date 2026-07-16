@@ -1,0 +1,6 @@
+@EtsoApi_HostAddress = http://localhost:5225
+
+GET {{EtsoApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

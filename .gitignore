@@ -1,0 +1,15 @@
+node_modules
+.next
+out
+.env*
+!.env.example
+*.log
+.DS_Store
+*.tsbuildinfo
+
+# Gizli bilgiler: yerel geliştirme yapılandırması (DB şifresi, JWT anahtarı) ve istek günlükleri
+backend/EtsoApi/appsettings.Development.json
+!backend/EtsoApi/appsettings.Development.example.json
+backend/EtsoApi/logs/
+backend/EtsoApi/bin/
+backend/EtsoApi/obj/

@@ -1,0 +1,247 @@
+using System.Threading.RateLimiting;
+using EtsoApi;
+using EtsoApi.Controllers;
+using EtsoApi.Data;
+using EtsoApi.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Gizli bilgiler kaynak kodda tutulmaz.
+// Geliştirme: appsettings.Development.json (git'e girmez) — Canlı: ConnectionStrings__EtsoDb ve Jwt__Anahtar ortam değişkenleri.
+var connectionString = builder.Configuration.GetConnectionString("EtsoDb");
+if (string.IsNullOrWhiteSpace(connectionString))
+    throw new InvalidOperationException(
+        "Veritabanı bağlantı dizesi tanımlı değil. Canlıda 'ConnectionStrings__EtsoDb' ortam değişkenini, " +
+        "geliştirmede appsettings.Development.json dosyasını doldurun.");
+
+builder.Services.AddDbContext<EtsoDbContext>(options =>
+    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+
+builder.Services.AddControllers();
+builder.Services.AddOpenApi();
+builder.Services.AddSingleton<TokenServisi>();
+
+// Ters vekil (nginx vb.) arkasında gerçek istemci IP'si — rate limit'in doğru çalışması için şart.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto);
+
+builder.Services.AddCors(options => options.AddPolicy("frontend", policy =>
+    policy.WithOrigins(builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? ["http://localhost:3000"])
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .WithExposedHeaders("Content-Disposition")));
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Jwt:Yayinci"],
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Jwt:Hedef"],
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(TokenServisi.AnahtarBaytlari(builder.Configuration)),
+            ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+            ClockSkew = TimeSpan.FromSeconds(30),
+            RoleClaimType = TokenServisi.RolClaim,
+        };
+
+        // Token 8 saat geçerli olduğundan, imzası doğru olsa bile her istekte kullanıcının
+        // GÜNCEL durumu doğrulanır. Aksi halde pasife alınan/silinen/rolü düşürülen bir kullanıcı
+        // elindeki token ile eski yetkileriyle çalışmaya devam ederdi.
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async ctx =>
+            {
+                var db = ctx.HttpContext.RequestServices.GetRequiredService<EtsoDbContext>();
+                var id = ctx.Principal?.KullaniciId();
+                if (id is null) { ctx.Fail("Geçersiz token."); return; }
+
+                var kullanici = await db.Kullanicilar.AsNoTracking()
+                    .Where(k => k.Id == id)
+                    .Select(k => new { k.Rol, k.Durum, k.SifreGuncelleme })
+                    .FirstOrDefaultAsync();
+
+                if (kullanici is null) { ctx.Fail("Kullanıcı bulunamadı."); return; }
+                if (kullanici.Durum != "Aktif") { ctx.Fail("Hesap pasif."); return; }
+
+                // Rol token'da donmuş olabilir; yetki her zaman veritabanındaki güncel role göre verilir.
+                if (ctx.Principal!.FindFirst(TokenServisi.RolClaim)?.Value != kullanici.Rol)
+                { ctx.Fail("Yetki değişti, yeniden giriş yapın."); return; }
+
+                // Şifre değiştirildiyse/sıfırlandıysa, o andan önce üretilmiş tüm token'lar geçersizdir.
+                // Üretim anı token'ın 'nbf' claim'inden okunur (SecurityToken tipi handler'a göre değişebildiği
+                // için tipe bağlı okuma kırılgandır; nbf'yi TokenServisi her token'a yazar).
+                var nbf = ctx.Principal!.FindFirst("nbf")?.Value;
+                var uretim = long.TryParse(nbf, out var saniye)
+                    ? DateTimeOffset.FromUnixTimeSeconds(saniye).UtcDateTime
+                    : DateTime.MinValue;
+
+                // 'nbf' saniyeye aşağı yuvarlandığı için 5 sn tolerans bırakılır (şifre değiştiren kullanıcının
+                // kendi taze token'ı elenmesin). Daha geniş tolerans, iptal edilen token'a yaşam süresi tanır.
+                // DateTime.MinValue'da taşmayı önlemek için alt sınır korunur.
+                var esik = kullanici.SifreGuncelleme > DateTime.MinValue.AddMinutes(1)
+                    ? kullanici.SifreGuncelleme.AddSeconds(-5)
+                    : DateTime.MinValue;
+                if (uretim < esik)
+                { ctx.Fail("Şifre değişti, yeniden giriş yapın."); return; }
+            },
+        };
+    });
+
+// Varsayılan kural: kimliği doğrulanmamış hiçbir istek hiçbir endpoint'e erişemez.
+// İstisnalar (giriş vb.) [AllowAnonymous] ile tek tek açılır.
+builder.Services.AddAuthorization(options =>
+    options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, ct) =>
+    {
+        context.HttpContext.Response.ContentType = "application/json; charset=utf-8";
+        await context.HttpContext.Response.WriteAsync(
+            "{\"mesaj\":\"Çok fazla istek gönderildi. Lütfen bir dakika sonra tekrar deneyin.\"}", ct);
+    };
+
+    static string Istemci(HttpContext c) => c.Connection.RemoteIpAddress?.ToString() ?? "bilinmeyen";
+
+    // Giriş ve şifre uçları: IP başına dakikada 10 deneme (brute-force / credential stuffing koruması).
+    options.AddPolicy("giris", context => RateLimitPartition.GetFixedWindowLimiter(
+        Istemci(context),
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
+
+    // Diğer tüm uçlar: IP başına dakikada 300 istek (kaba kuvvet ve veri kazıma yavaşlatma).
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            Istemci(context),
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = 300, Window = TimeSpan.FromMinutes(1) }));
+});
+
+var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<EtsoDbContext>();
+    await db.Database.MigrateAsync();
+
+    // Kabul akışı kaldırıldığı için eski yanıtsız/reddedilmiş atamalar doğrudan aktif hale getirilir.
+    await db.Gorevlendirmeler
+        .Where(g => g.Durum == "Bekleyen" || g.Durum == "Reddedildi")
+        .ExecuteUpdateAsync(g => g.SetProperty(x => x.Durum, "Aktif"));
+
+    // Örnek/demo veri üretimi yalnızca açıkça istenirse çalışır (appsettings: OrnekVeriOlustur).
+    if (builder.Configuration.GetValue<bool>("OrnekVeriOlustur"))
+        await DataSeeder.SeedAsync(db);
+
+    // Sistemde hiç kullanıcı yoksa (temiz kurulum) varsayılan yönetici hesabı oluşturulur.
+    if (!await db.Kullanicilar.AnyAsync())
+    {
+        db.Kullanicilar.Add(new EtsoApi.Models.Kullanici
+        {
+            AdSoyad = "Ahmet Yılmaz",
+            KullaniciAdi = "ahmet.yilmaz",
+            Rol = "Yönetici",
+            Gorev = "Sistem Yöneticisi",
+            Birim = "Bilgi İşlem",
+            Eposta = "ahmet.yilmaz@erzto.org.tr",
+        });
+        await db.SaveChangesAsync();
+    }
+
+    // Şifresi olmayan kullanıcılara başlangıç şifresi atanır.
+    // Sabit parola kaynak koda yazılmaz; temiz kurulumda giriş yapılacak hesaplar config/env ile belirlenir.
+    var baslangicSifreleri = new Dictionary<string, string>
+        {
+            ["ahmet.yilmaz"] = builder.Configuration["Bootstrap:AdminPassword"] ?? string.Empty,
+            ["fatma.demir"] = builder.Configuration["Bootstrap:GorevliPassword"] ?? string.Empty,
+        }
+        .Where(x => !string.IsNullOrWhiteSpace(x.Value))
+        .ToDictionary(x => x.Key, x => x.Value);
+    var sifresizler = await db.Kullanicilar.Where(k => k.SifreHash == null).ToListAsync();
+    foreach (var kullanici in sifresizler)
+    {
+        var sifre = baslangicSifreleri.GetValueOrDefault(kullanici.KullaniciAdi)
+            ?? Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        kullanici.SifreHash = AuthController.Hashle(kullanici, sifre);
+    }
+    if (sifresizler.Count > 0) await db.SaveChangesAsync();
+}
+
+app.UseForwardedHeaders();
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi().AllowAnonymous();
+}
+else
+{
+    // Canlıda yalnızca HTTPS; tarayıcıya 180 gün boyunca HTTP'ye düşme demesi söylenir.
+    app.UseHsts();
+    app.UseHttpsRedirection();
+}
+
+// Güvenlik başlıkları. API yalnızca JSON/dosya döndürür; hiçbir şekilde çerçevelenmemeli
+// ve içerik tipi tarayıcı tarafından tahmin edilmemelidir.
+app.Use(async (context, next) =>
+{
+    var basliklar = context.Response.Headers;
+    basliklar["X-Content-Type-Options"] = "nosniff";
+    basliklar["X-Frame-Options"] = "DENY";
+    basliklar["Referrer-Policy"] = "no-referrer";
+    basliklar["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
+    basliklar["Cache-Control"] = "no-store";
+    await next();
+});
+
+app.UseCors("frontend");
+app.UseRateLimiter();
+app.UseAuthentication();
+app.UseAuthorization();
+
+// Basit istek günlüğü: Ayarlar > Sistem Logları ekranından indirilebilir.
+var logDizini = Path.Combine(app.Environment.ContentRootPath, "logs");
+Directory.CreateDirectory(logDizini);
+var logDosyasi = Path.Combine(logDizini, "istekler.log");
+var logKilidi = new object();
+const long enFazlaLogBoyutu = 10 * 1024 * 1024; // 10 MB'ı aşınca dosya devredilir (disk dolmasın).
+
+// Satır sonu/kontrol karakterleri temizlenir: aksi halde URL'ye %0A koyup sahte log satırı yazılabilirdi.
+static string LogGuvenli(string? metin, int enFazla = 300)
+{
+    if (string.IsNullOrEmpty(metin)) return "";
+    var temiz = new string(metin.Where(k => !char.IsControl(k)).ToArray());
+    return temiz.Length <= enFazla ? temiz : temiz[..enFazla];
+}
+
+app.Use(async (context, next) =>
+{
+    var baslangic = DateTime.Now;
+    await next();
+    var kimlik = context.User.Identity?.IsAuthenticated == true ? context.User.Identity.Name ?? "?" : "anonim";
+    var satir = $"{baslangic:yyyy-MM-dd HH:mm:ss} [{LogGuvenli(kimlik, 60)}] {LogGuvenli(context.Request.Method, 10)} " +
+                $"{LogGuvenli(context.Request.Path + context.Request.QueryString)} -> {context.Response.StatusCode} " +
+                $"({(DateTime.Now - baslangic).TotalMilliseconds:F0} ms)\n";
+    lock (logKilidi)
+    {
+        var bilgi = new FileInfo(logDosyasi);
+        if (bilgi.Exists && bilgi.Length > enFazlaLogBoyutu)
+        {
+            var arsiv = Path.Combine(logDizini, $"istekler-{DateTime.Now:yyyyMMdd-HHmmss}.log");
+            File.Move(logDosyasi, arsiv, overwrite: true);
+        }
+        File.AppendAllText(logDosyasi, satir);
+    }
+});
+
+app.MapControllers();
+
+app.Run();
