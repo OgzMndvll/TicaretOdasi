@@ -104,27 +104,18 @@ select option:disabled{color:var(--muted)}
 
 /* Sol: Erzurum gece silüeti üzerine lacivert perde */
 .giris-tanitim{
-  position:relative;display:flex;flex-direction:column;justify-content:space-between;
+  position:relative;display:flex;flex-direction:column;justify-content:flex-start;
   padding:46px 52px;color:#fff;overflow:hidden;
   background:
     linear-gradient(180deg,rgba(4,20,48,.94) 0%,rgba(5,26,60,.78) 42%,rgba(4,20,48,.30) 100%),
-    url("/giris-arkaplan.png") center/cover no-repeat;
+    var(--giris-arkaplan,url("/giris-arkaplan.png")) center/cover no-repeat;
 }
 .giris-marka img{width:270px;height:auto;filter:brightness(0) invert(1)}
-.giris-tanitim-govde{margin-bottom:6vh}
-.giris-tanitim h1{font-size:34px;line-height:1.2;margin:0;letter-spacing:-.4px}
+/* Metin bloğu kalan alanı doldurur ve dikeyde ortalanır; alttaki boşluk onu
+   ortanın biraz yukarısına çeker. */
+.giris-tanitim-govde{flex:1;display:flex;flex-direction:column;justify-content:center;padding-bottom:16vh}
+.giris-tanitim h1{font-size:31px;line-height:1.22;margin:0;letter-spacing:-.2px;max-width:12ch;text-wrap:balance}
 .giris-alt-baslik{margin:8px 0 0;font-size:19px;font-weight:600;color:#5ea0ff}
-.giris-cizgi{display:block;width:54px;height:4px;border-radius:3px;background:var(--blue);margin:22px 0 20px}
-.giris-slogan{margin:0 0 34px;font-size:14px;line-height:1.7;color:#d3e0f2}
-.giris-ozellikler{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:18px}
-.giris-ozellikler li{display:flex;gap:14px;align-items:flex-start}
-.giris-ozellikler li>span{
-  flex:0 0 auto;width:42px;height:42px;border-radius:10px;display:grid;place-items:center;color:#8bbcff;
-  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);backdrop-filter:blur(6px);
-}
-.giris-ozellikler div{display:flex;flex-direction:column;gap:4px;padding-top:2px}
-.giris-ozellikler strong{font-size:13px;font-weight:700}
-.giris-ozellikler small{font-size:12px;line-height:1.55;color:#b9cae0;max-width:290px}
 
 /* Sağ: form sütunu */
 .giris-form-alani{

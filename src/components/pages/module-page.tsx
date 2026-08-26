@@ -147,11 +147,16 @@ export function ModulePage({ kind }: { kind: PageKind }) {
     return () => document.removeEventListener("keydown", kapat);
   }, [tamEkran, detay, action, duzenleme, silme, iceAktarAcik, rolYonetimiAcik]);
 
-  // Filtre seçenekleri için referans listeler
+  // Filtre seçenekleri için referans listeler. Hataları yutmuyoruz: bu istekler sessizce
+  // başarısız olduğunda açılır süzgeç, sebebi görünmeden boş ("Sonuç yok") kalıyordu.
   useEffect(() => {
     if (kind === "calisanlar") return;
-    api.get<GrupKaydi[]>("/api/gruplar").then(setGruplar).catch(() => {});
-    api.get<KullaniciKaydi[]>("/api/kullanicilar").then(setGorevliler).catch(() => {});
+    api.get<GrupKaydi[]>("/api/gruplar")
+      .then(setGruplar)
+      .catch(() => setToast("Meslek grubu listesi alınamadı; grup süzgeci boş görünecek."));
+    api.get<KullaniciKaydi[]>("/api/kullanicilar")
+      .then(setGorevliler)
+      .catch(() => setToast("Çalışan listesi alınamadı; çalışan süzgeci boş görünecek."));
   }, [kind, yenileme]);
 
   // Liste verisi

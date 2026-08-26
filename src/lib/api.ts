@@ -1,4 +1,5 @@
 import { cikisYap, tokenAl } from "./auth";
+import { icYol } from "./yol";
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "https://api.courseintellect.com.tr").replace(/\/+$/, "");
 export const API_ERISIM_HATASI = `Veriler alınamadı. API'ye ulaşılamadı (${API_URL}).`;
@@ -14,7 +15,8 @@ function yetkiBasligi(): Record<string, string> {
 
 /** 401 dönen isteklerde oturum düşmüş demektir: token temizlenip girişe yönlendirilir. */
 function oturumKontrol(res: Response) {
-  if (res.status === 401 && typeof window !== "undefined" && !window.location.pathname.startsWith("/giris")) {
+  // pathname alt yolu da içerir; karşılaştırma öncesi ayıklanır.
+  if (res.status === 401 && typeof window !== "undefined" && !icYol(window.location.pathname).startsWith("/giris")) {
     cikisYap();
   }
 }

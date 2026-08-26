@@ -47,7 +47,7 @@ export function CokluSecim({ label, options, value, onChange }: {
 
   return <div className="coklu-secim" ref={kapRef}>
     <button type="button" className={`coklu-kutu ${acik ? "acik" : ""} ${secili.length ? "dolu" : ""}`}
-      aria-haspopup="listbox" aria-expanded={acik} onClick={() => setAcik(a => !a)}>
+      aria-haspopup="listbox" aria-expanded={acik} onClick={() => { setArama(""); setAcik(a => !a); }}>
       <span title={ozet}>{ozet}</span>
       {secili.length > 1 && <b>{secili.length}</b>}
       <ChevronDown size={15} />
@@ -56,7 +56,9 @@ export function CokluSecim({ label, options, value, onChange }: {
       {options.length > 8 && <input className="coklu-arama" autoFocus placeholder="Ara..." value={arama}
         maxLength={60} onChange={e => setArama(e.target.value)} />}
       <div className="coklu-liste">
-        {gorunen.length === 0 && <p className="coklu-bos">Sonuç yok.</p>}
+        {gorunen.length === 0 && <p className="coklu-bos">
+          {options.length === 0 ? "Liste boş." : "Aramayla eşleşen seçenek yok."}
+        </p>}
         {gorunen.map(o => {
           const isaretli = secili.includes(o.deger);
           return <button type="button" key={o.deger} role="option" aria-selected={isaretli}

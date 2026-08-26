@@ -3,20 +3,15 @@
 import { FormEvent, useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { BarChart3, Eye, EyeOff, KeyRound, Lock, LogIn, ShieldCheck, Users, UserRound } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Lock, ShieldCheck, UserRound } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { girisliMi, tokenKaydet } from "@/lib/auth";
+import { varlik } from "@/lib/yol";
 
 interface GirisCevabi {
   token: string;
   kullanici: { id: number; adSoyad: string; kullaniciAdi: string; rol: string };
 }
-
-const OZELLIKLER = [
-  { ikon: Users, baslik: "Etkin Üye Yönetimi", metin: "Tüm üye bilgilerini düzenli ve güncel tutun." },
-  { ikon: BarChart3, baslik: "Görüşme & Raporlama", metin: "Görüşmeleri kaydedin, raporlarla kararlarınıza yön verin." },
-  { ikon: ShieldCheck, baslik: "Güvenli & Yetkili Erişim", metin: "Rol bazlı yetkilendirme ile güvenli kullanım sağlayın." },
-];
 
 export default function GirisSayfasi() {
   const router = useRouter();
@@ -46,24 +41,14 @@ export default function GirisSayfasi() {
   }
 
   return <div className="giris-ekran">
-    <aside className="giris-tanitim">
+    {/* Arka plan CSS'te url(...) ile yazılsaydı basePath ön eki eklenmez, alt yolda 404 olurdu. */}
+    <aside className="giris-tanitim" style={{ ["--giris-arkaplan" as string]: `url("${varlik("/giris-arkaplan.png")}")` }}>
       <div className="giris-marka">
-        <Image src="/etso.png" alt="Erzurum Ticaret Odası" width={300} height={60} priority />
+        <Image src={varlik("/etso.png")} alt="Erzurum Ticaret ve Sanayi Odası" width={300} height={60} priority />
       </div>
       <div className="giris-tanitim-govde">
-        <h1>Erzurum Ticaret Odası</h1>
+        <h1>ERZURUM TİCARET VE SANAYİ ODASI</h1>
         <p className="giris-alt-baslik">Dijital Yönetim Sistemi</p>
-        <span className="giris-cizgi" />
-        <p className="giris-slogan">Üyelerimizle daha güçlü bir iletişim,<br />daha şeffaf bir yönetim.</p>
-        <ul className="giris-ozellikler">
-          {OZELLIKLER.map(({ ikon: Ikon, baslik, metin }) => <li key={baslik}>
-            <span><Ikon size={19} /></span>
-            <div>
-              <strong>{baslik}</strong>
-              <small>{metin}</small>
-            </div>
-          </li>)}
-        </ul>
       </div>
     </aside>
 
@@ -125,7 +110,7 @@ export default function GirisSayfasi() {
           </div>
         </span>
         <span className="giris-telif">
-          © {new Date().getFullYear()} Erzurum Ticaret Odası<br />
+          © {new Date().getFullYear()} Erzurum Ticaret ve Sanayi Odası<br />
           <small>Tüm hakları saklıdır.</small>
         </span>
       </footer>

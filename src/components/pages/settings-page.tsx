@@ -7,6 +7,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Toast } from "@/components/ui/toast";
 import { api, ApiError } from "@/lib/api";
 import { tokenKaydet, yoneticiMi } from "@/lib/auth";
+import { varlik } from "@/lib/yol";
 
 const VARSAYILANLAR: Record<string, string> = {
   dil: "Türkçe", saatDilimi: "(UTC+03:00) İstanbul", tarihFormati: "GG.AA.YYYY", saatFormati: "24 Saat", sayfaBoyutu: "20",
@@ -113,7 +114,7 @@ export function SettingsPage() {
         {yonetici && <section className="panel institution-card" id="ayar-kurum">
           <header><div><h2>Kurum Bilgileri</h2><p>Oda/kurum bilgilerinizi güncelleyin.</p></div><span className="stat-icon green"><Building2 size={24} /></span></header>
           <div className="institution-grid">
-            <div className="logo-preview"><Image src="/etso.png" alt="ETSO logosu" width={450} height={90} /></div>
+            <div className="logo-preview"><Image src={varlik("/etso.png")} alt="ETSO logosu" width={450} height={90} /></div>
             {[["kurumAdi", "Kurum Adı"], ["kurumKisaAd", "Kısa Ad"], ["kurumVergiNo", "Vergi No"], ["kurumAdres", "Adres"], ["kurumTelefon", "Telefon"], ["kurumEposta", "E-posta"]].map(([anahtar, etiket]) =>
               <label key={anahtar}><span>{etiket}</span>
                 <input value={deger(anahtar)} maxLength={200} onChange={e => degistir(anahtar, e.target.value)} />

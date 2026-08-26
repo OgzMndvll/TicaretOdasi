@@ -17,6 +17,20 @@ public class GruplarController(EtsoDbContext db, CanliBildirim canli) : Controll
         if (!string.IsNullOrWhiteSpace(durum)) sorgu = sorgu.Where(g => g.Durum == durum);
         if (!string.IsNullOrWhiteSpace(tur)) sorgu = sorgu.Where(g => g.Tur == tur);
 
+        // "Aktif görevli" (gruptaki farklı görevli sayısı) bilerek AYRI bir sorgu ile hesaplanır.
+        // Tek sorguda `g.Esnaflar...Distinct().Count()` yazıldığında EF, dış anahtarı (g.Id) türetilmiş
+        // bir tablonun içinden referanslayan korelasyonlu bir DISTINCT alt sorgusu üretir. MySQL 8 bunu
+        // çalıştırır ama MariaDB çalıştıramaz ve "Unknown column 'g.Id' in 'WHERE'" hatası verir; canlı
+        // sunucu MariaDB olduğu için bu uç orada 500 dönüyordu. Aşağıdaki biçim korelasyon içermez,
+        // her iki veritabanında da çalışır ve grup başına alt sorgu yerine tek toplulaştırma yapar.
+        var aktifGorevliSayilari = await db.Esnaflar.AsNoTracking()
+            .Where(e => e.GrupId != null && e.GorevliId != null)
+            .Select(e => new { GrupId = e.GrupId!.Value, GorevliId = e.GorevliId!.Value })
+            .Distinct()
+            .GroupBy(x => x.GrupId)
+            .Select(x => new { GrupId = x.Key, Adet = x.Count() })
+            .ToDictionaryAsync(x => x.GrupId, x => x.Adet);
+
         var kayitlar = await sorgu
             // Meslek grupları oda numarasına göre sıralanır; numarasız gruplar sona alfabetik gelir.
             .OrderBy(g => g.No == null).ThenBy(g => g.No).ThenBy(g => g.Ad)
@@ -25,12 +39,18 @@ public class GruplarController(EtsoDbContext db, CanliBildirim canli) : Controll
                 g.Id, g.No, g.Ad, g.Aciklama, g.Tur,
                 g.UstGrupId, UstGrup = g.UstGrup != null ? g.UstGrup.Ad : null,
                 EsnafSayisi = g.Esnaflar.Count,
-                AktifGorevli = g.Esnaflar.Where(e => e.GorevliId != null).Select(e => e.GorevliId).Distinct().Count(),
                 g.Durum, g.GuncellemeTarihi,
             })
             .ToListAsync();
 
-        return Ok(kayitlar);
+        var sonuc = kayitlar.Select(g => new
+        {
+            g.Id, g.No, g.Ad, g.Aciklama, g.Tur, g.UstGrupId, g.UstGrup, g.EsnafSayisi,
+            AktifGorevli = aktifGorevliSayilari.GetValueOrDefault(g.Id),
+            g.Durum, g.GuncellemeTarihi,
+        });
+
+        return Ok(sonuc);
     }
 
     [HttpGet("istatistik")]

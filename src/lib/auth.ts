@@ -1,3 +1,5 @@
+import { yol } from "./yol";
+
 const TOKEN_ANAHTARI = "etso_token";
 
 export interface Kimlik { id: number; adSoyad: string; kullaniciAdi: string; rol: string; bitis: number }
@@ -21,7 +23,9 @@ export function tokenKaydet(token: string, hatirla = true) {
 export function cikisYap() {
   window.localStorage.removeItem(TOKEN_ANAHTARI);
   window.sessionStorage.removeItem(TOKEN_ANAHTARI);
-  window.location.href = "/giris";
+  // window.location basePath'i kendiliğinden eklemez; alt yolda yayınlandığında
+  // düz "/giris" panelin dışına çıkardı.
+  window.location.href = yol("/giris");
 }
 
 /** JWT gövdesini çözer (imza doğrulaması sunucuda yapılır; burada yalnızca görüntüleme amaçlı okunur). */

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
@@ -29,7 +30,7 @@ export function AppShell({ title, children }: { title: string; children: React.R
         <Topbar onMenu={() => setMobileOpen(true)} />
         <div className="page-heading">
           <h1>{title}</h1>
-          {title === "Dashboard" ? <p>Hoş geldiniz, {kimlik()?.adSoyad ?? ""}</p> : <p><a href="/">Dashboard</a><span>›</span>{title}</p>}
+          {title === "Dashboard" ? <p>Hoş geldiniz, {kimlik()?.adSoyad ?? ""}</p> : <p><Link href="/">Dashboard</Link><span>›</span>{title}</p>}
         </div>
         {children}
       </main>

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { LogOut, X } from "lucide-react";
 import { navigation } from "@/lib/navigation";
 import { cikisYap } from "@/lib/auth";
+import { varlik } from "@/lib/yol";
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
@@ -17,7 +18,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
       <aside className={`sidebar ${open ? "open" : ""}`}>
         <button className="sidebar-close" onClick={onClose} aria-label="Menüyü kapat"><X size={20} /></button>
         <Link href="/" className="brand" aria-label="Erzurum Ticaret Odası ana sayfa">
-          <Image src="/etso.png" alt="Erzurum Ticaret Odası" width={450} height={90} priority />
+          <Image src={varlik("/etso.png")} alt="Erzurum Ticaret ve Sanayi Odası" width={450} height={90} priority />
         </Link>
         <nav className="side-nav" aria-label="Ana navigasyon">
           {menu.map(({ label, href, icon: Icon }) => {
@@ -26,7 +27,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           })}
         </nav>
         <div className="sidebar-city" aria-hidden="true">
-          <Image src="/erzurum-silueti.png" alt="" width={768} height={512} className="sidebar-siluet" />
+          <Image src={varlik("/erzurum-silueti.png")} alt="" width={768} height={512} className="sidebar-siluet" />
         </div>
         <button className="logout" onClick={cikisYap}><LogOut size={20} /> Çıkış Yap</button>
       </aside>

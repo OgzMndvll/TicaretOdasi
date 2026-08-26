@@ -10,6 +10,11 @@ const apiKaynagi = (() => {
   }
 })();
 
+// Panel bir alt yolda yayınlanabilir (ör. ajansorkestra.com.tr/EtsoSecim). basePath derleme
+// anında sabitlenir, bu yüzden ortam değişkeninden okunur ve sondaki "/" temizlenir.
+// Boş bırakılırsa (yerel geliştirme) uygulama kök dizinde çalışır.
+const altYol = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").replace(/\/+$/, "");
+
 // SignalR canlı kanalı aynı API kaynağına ws/wss şemasıyla bağlanır. CSP3'te "https://x"
 // ifadesi "wss://x" ile de eşleşir; yine de tarayıcı farklılıklarına yer bırakmamak için
 // soket kaynağı connect-src listesine açıkça yazılır.
@@ -52,6 +57,7 @@ const guvenlikBasliklari = [
 ];
 
 const nextConfig = {
+  ...(altYol ? { basePath: altYol } : {}),
   poweredByHeader: false,
   reactStrictMode: true,
   // Geliştirme modundaki yuvarlak "N" rozetini gizler (yalnızca dev'de görünürdü).
@@ -59,6 +65,7 @@ const nextConfig = {
   outputFileTracingRoot: process.cwd(),
   images: { formats: ["image/avif", "image/webp"] },
   async headers() {
+    // Kaynak deseni basePath'e göre otomatik ön eklenir; burada kök desen yeterlidir.
     return [{ source: "/:path*", headers: guvenlikBasliklari }];
   },
 };

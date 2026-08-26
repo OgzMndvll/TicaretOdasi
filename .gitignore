@@ -14,6 +14,9 @@ backend/EtsoApi/logs/
 backend/EtsoApi/bin/
 backend/EtsoApi/obj/
 
+# dotnet publish ciktisi (dagitim paketi, kaynak degil)
+publish/
+
 # Gerçek üye verisi: depo herkese açık olduğu için veri dosyaları versiyonlanmaz
 backups/
 *.xlsx
