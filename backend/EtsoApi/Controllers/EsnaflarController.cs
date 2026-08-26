@@ -12,32 +12,45 @@ public class EsnaflarController(EtsoDbContext db) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> Listele(
-        [FromQuery] string? durum, [FromQuery] int? grupId, [FromQuery] int? gorevliId,
-        [FromQuery] string? ilce, [FromQuery] string? arama, [FromQuery] string? sirala,
-        [FromQuery] bool gorevlendirilmis = false,
+        // Çoklu seçime açık süzgeçler dizi olarak gelir: ?durum=Onay Verdi&durum=Kararsız
+        [FromQuery] List<string>? durum, [FromQuery] List<string>? uyelikDurumu, [FromQuery] List<int>? grupId,
+        [FromQuery] List<int>? gorevliId, [FromQuery] List<int>? gorusenId, [FromQuery] List<string>? ilce,
+        [FromQuery] bool? takipGerekli, [FromQuery] bool? gorusuldu,
+        [FromQuery] string? arama, [FromQuery] string? sirala,
         [FromQuery] int sayfa = 1, [FromQuery] int sayfaBoyutu = 20)
     {
         var sorgu = db.Esnaflar.AsNoTracking();
 
-        // Görevli rolü esnaf rehberinin tamamını göremez; yalnızca kendi görevlendirmelerindekileri görür.
-        if (!User.Yonetici()) gorevlendirilmis = true;
-
-        // gorevlendirilmis=true → yalnızca oturumdaki kullanıcıya atanmış aktif üyeler
-        if (gorevlendirilmis)
-        {
-            var benimId = User.KullaniciId();
-            sorgu = sorgu.Where(e => db.Gorevlendirmeler.Any(g =>
-                g.EsnafId == e.Id && g.GorevliId == benimId && g.Durum == "Aktif"));
-        }
-
-        if (!string.IsNullOrWhiteSpace(durum)) sorgu = sorgu.Where(e => e.Durum == durum);
-        if (grupId is not null) sorgu = sorgu.Where(e => e.GrupId == grupId);
-        if (gorevliId is not null) sorgu = sorgu.Where(e => e.GorevliId == gorevliId);
-        if (!string.IsNullOrWhiteSpace(ilce)) sorgu = sorgu.Where(e => e.Ilce == ilce);
+        // Aynı süzgeçte birden çok değer VEYA, farklı süzgeçler VE ile birleşir:
+        // "(2. veya 5. grup) VE (onay verdi veya kararsız)".
+        if (Dolu(durum)) sorgu = sorgu.Where(e => durum!.Contains(e.Durum));
+        if (Dolu(uyelikDurumu)) sorgu = sorgu.Where(e => uyelikDurumu!.Contains(e.UyelikDurumu));
+        if (Dolu(grupId)) sorgu = sorgu.Where(e => e.GrupId != null && grupId!.Contains(e.GrupId.Value));
+        if (Dolu(gorevliId)) sorgu = sorgu.Where(e => e.GorevliId != null && gorevliId!.Contains(e.GorevliId.Value));
+        // "Görüşen çalışan": üyeye atanan kişi değil, üyeyle fiilen görüşme yapmış çalışan.
+        if (Dolu(gorusenId)) sorgu = sorgu.Where(e => e.Gorusmeler.Any(g => gorusenId!.Contains(g.GorevliId)));
+        if (takipGerekli is not null)
+            sorgu = takipGerekli.Value
+                ? sorgu.Where(e => e.Gorusmeler.Any(g => g.TakipGerekli))
+                : sorgu.Where(e => !e.Gorusmeler.Any(g => g.TakipGerekli));
+        if (gorusuldu is not null)
+            sorgu = gorusuldu.Value ? sorgu.Where(e => e.Gorusmeler.Any()) : sorgu.Where(e => !e.Gorusmeler.Any());
+        if (Dolu(ilce)) sorgu = sorgu.Where(e => e.Ilce != null && ilce!.Contains(e.Ilce));
         if (!string.IsNullOrWhiteSpace(arama))
-            sorgu = sorgu.Where(e => e.AdSoyad.Contains(arama) || e.Isletme.Contains(arama) || (e.Telefon != null && e.Telefon.Contains(arama)));
+            sorgu = sorgu.Where(e => e.AdSoyad.Contains(arama) || e.Isletme.Contains(arama)
+                || (e.Telefon != null && e.Telefon.Contains(arama))
+                || (e.UyeSicilNo != null && e.UyeSicilNo.Contains(arama))
+                || (e.TicaretSicilNo != null && e.TicaretSicilNo.Contains(arama)));
 
-        var toplam = await sorgu.CountAsync();
+        // Liste toplamı ve üstteki durum kartları aynı sorgudan, aynı anda hesaplanır.
+        // Böylece grup/çalışan/ilçe gibi bir süzgeç değiştiğinde tablo ile kartlar ayrışamaz.
+        var durumSayilari = await sorgu
+            .GroupBy(e => e.Durum)
+            .Select(g => new { Durum = g.Key, Adet = g.Count() })
+            .ToListAsync();
+        var toplam = durumSayilari.Sum(g => g.Adet);
+        int DurumSayisi(string deger) => durumSayilari.FirstOrDefault(g => g.Durum == deger)?.Adet ?? 0;
+        var genelToplam = await db.Esnaflar.AsNoTracking().CountAsync();
         sayfaBoyutu = Math.Clamp(sayfaBoyutu, 1, 100);
         sayfa = Math.Max(sayfa, 1);
 
@@ -53,61 +66,115 @@ public class EsnaflarController(EtsoDbContext db) : ControllerBase
             .Select(e => new
             {
                 e.Id, e.AdSoyad, e.Isletme, e.VergiNo,
-                e.GrupId, Grup = e.Grup != null ? e.Grup.Ad : null,
-                e.Il, e.Ilce, e.Mahalle, e.Adres, e.Telefon,
+                e.GrupId, Grup = e.Grup != null ? e.Grup.Ad : null, GrupNo = e.Grup != null ? e.Grup.No : null,
+                e.Il, e.Ilce, e.Mahalle, e.Adres, e.Telefon, e.IsTelefonu,
                 e.GorevliId, Gorevli = e.Gorevli != null ? e.Gorevli.AdSoyad : null,
                 e.Durum, e.SonGorusmeTarihi, e.KayitTarihi,
+                e.UyeSicilNo, e.TicaretSicilNo, e.SirketTipi, e.Gorevi,
+                e.UyelikDurumu, e.DurumDegisimTarihi, e.DurumDegisimNedeni, e.NaceKodu,
             })
             .ToListAsync();
-
-        return Ok(new { toplam, sayfa, sayfaBoyutu, kayitlar });
-    }
-
-    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Yönetici")]
-    [HttpGet("istatistik")]
-    public async Task<IActionResult> Istatistik()
-    {
-        var gruplu = await db.Esnaflar.GroupBy(e => e.Durum)
-            .Select(g => new { Durum = g.Key, Adet = g.Count() }).ToListAsync();
-        var toplam = gruplu.Sum(g => g.Adet);
-        int Say(string durum) => gruplu.FirstOrDefault(g => g.Durum == durum)?.Adet ?? 0;
 
         return Ok(new
         {
             toplam,
+            sayfa,
+            sayfaBoyutu,
+            kayitlar,
+            istatistik = new
+            {
+                toplam,
+                genelToplam,
+                // Grup kartı tüm diğer aktif süzgeçleri de dikkate alan gerçek liste toplamıdır.
+                grupToplam = Dolu(grupId) ? toplam : 0,
+                onayVeren = DurumSayisi("Onay Verdi"),
+                onayVermeyen = DurumSayisi("Onay Vermedi"),
+                kararsiz = DurumSayisi("Kararsız"),
+                gorusulmemis = DurumSayisi("Görüşülmedi"),
+            },
+        });
+    }
+
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Yönetici")]
+    [HttpGet("istatistik")]
+    public async Task<IActionResult> Istatistik(
+        [FromQuery] List<string>? durum, [FromQuery] List<string>? uyelikDurumu, [FromQuery] List<int>? grupId,
+        [FromQuery] List<int>? gorevliId, [FromQuery] List<int>? gorusenId, [FromQuery] List<string>? ilce,
+        [FromQuery] bool? takipGerekli, [FromQuery] bool? gorusuldu, [FromQuery] string? arama)
+    {
+        // Kartlar, listeyle birebir aynı süzgeç kapsamını kullanır.
+        var sorgu = db.Esnaflar.AsNoTracking();
+        if (Dolu(durum)) sorgu = sorgu.Where(e => durum!.Contains(e.Durum));
+        if (Dolu(uyelikDurumu)) sorgu = sorgu.Where(e => uyelikDurumu!.Contains(e.UyelikDurumu));
+        if (Dolu(grupId)) sorgu = sorgu.Where(e => e.GrupId != null && grupId!.Contains(e.GrupId.Value));
+        if (Dolu(gorevliId)) sorgu = sorgu.Where(e => e.GorevliId != null && gorevliId!.Contains(e.GorevliId.Value));
+        if (Dolu(gorusenId)) sorgu = sorgu.Where(e => e.Gorusmeler.Any(g => gorusenId!.Contains(g.GorevliId)));
+        if (takipGerekli is not null)
+            sorgu = takipGerekli.Value
+                ? sorgu.Where(e => e.Gorusmeler.Any(g => g.TakipGerekli))
+                : sorgu.Where(e => !e.Gorusmeler.Any(g => g.TakipGerekli));
+        if (gorusuldu is not null)
+            sorgu = gorusuldu.Value ? sorgu.Where(e => e.Gorusmeler.Any()) : sorgu.Where(e => !e.Gorusmeler.Any());
+        if (Dolu(ilce)) sorgu = sorgu.Where(e => e.Ilce != null && ilce!.Contains(e.Ilce));
+        if (!string.IsNullOrWhiteSpace(arama))
+            sorgu = sorgu.Where(e => e.AdSoyad.Contains(arama) || e.Isletme.Contains(arama)
+                || (e.Telefon != null && e.Telefon.Contains(arama))
+                || (e.UyeSicilNo != null && e.UyeSicilNo.Contains(arama))
+                || (e.TicaretSicilNo != null && e.TicaretSicilNo.Contains(arama)));
+
+        var gruplu = await sorgu.GroupBy(e => e.Durum)
+            .Select(g => new { Durum = g.Key, Adet = g.Count() }).ToListAsync();
+        var toplam = gruplu.Sum(g => g.Adet);
+        int Say(string durum) => gruplu.FirstOrDefault(g => g.Durum == durum)?.Adet ?? 0;
+        var uyelik = await sorgu.GroupBy(e => e.UyelikDurumu)
+            .Select(g => new { Durum = g.Key, Adet = g.Count() }).ToListAsync();
+        var genelToplam = await db.Esnaflar.CountAsync();
+        int? grupToplam = Dolu(grupId)
+            ? await db.Esnaflar.CountAsync(e => e.GrupId != null && grupId!.Contains(e.GrupId.Value))
+            : null;
+
+        return Ok(new
+        {
+            toplam,
+            genelToplam,
+            grupToplam,
             onayVeren = Say("Onay Verdi"),
             onayVermeyen = Say("Onay Vermedi"),
             kararsiz = Say("Kararsız"),
             gorusulmemis = Say("Görüşülmedi"),
             gorusulen = toplam - Say("Görüşülmedi"),
+            faal = uyelik.FirstOrDefault(u => u.Durum == "Faal")?.Adet ?? 0,
+            askida = uyelik.FirstOrDefault(u => u.Durum == "Askı")?.Adet ?? 0,
+            pasif = uyelik.FirstOrDefault(u => u.Durum == "Pasif")?.Adet ?? 0,
         });
     }
 
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Getir(int id)
     {
-        // Görevli, yalnızca kendisine görevlendirilmiş esnafın detayını görebilir.
-        if (!User.Yonetici() && !await db.Gorevlendirmeler.AnyAsync(g =>
-                g.EsnafId == id && g.GorevliId == User.KullaniciId()))
-            return Forbid();
-
         var esnaf = await db.Esnaflar.AsNoTracking()
-            .Include(e => e.Grup).Include(e => e.Gorevli)
-            .Include(e => e.Gorusmeler.OrderByDescending(g => g.Tarih)).ThenInclude(g => g.Gorevli)
+            .Include(e => e.Grup).Include(e => e.Gorevli).Include(e => e.Yetkililer)
+            .Include(e => e.Gorusmeler.OrderBy(g => g.Sira).ThenBy(g => g.Tarih)).ThenInclude(g => g.Gorevli)
             .FirstOrDefaultAsync(e => e.Id == id);
         if (esnaf is null) return NotFound();
 
         return Ok(new
         {
             esnaf.Id, esnaf.AdSoyad, esnaf.Isletme, esnaf.VergiNo,
-            esnaf.GrupId, Grup = esnaf.Grup?.Ad,
-            esnaf.Il, esnaf.Ilce, esnaf.Mahalle, esnaf.Adres, esnaf.Telefon,
+            esnaf.GrupId, Grup = esnaf.Grup?.Ad, GrupNo = esnaf.Grup?.No,
+            esnaf.Il, esnaf.Ilce, esnaf.Mahalle, esnaf.Adres, esnaf.Telefon, esnaf.IsTelefonu,
             esnaf.GorevliId, Gorevli = esnaf.Gorevli?.AdSoyad,
             esnaf.Durum, esnaf.SonGorusmeTarihi, esnaf.KayitTarihi,
+            esnaf.UyeSicilNo, esnaf.TicaretSicilNo, esnaf.SirketTipi, esnaf.TabelaUnvani,
+            esnaf.Uyruk, esnaf.Sermaye, esnaf.Derece, esnaf.VergiDairesi, esnaf.VergiTerkTarihi,
+            esnaf.KurulusTarihi, esnaf.OdaKararTarihi, esnaf.Gorevi,
+            esnaf.UyelikDurumu, esnaf.DurumDegisimTarihi, esnaf.DurumDegisimNedeni,
+            esnaf.FaaliyetDetayi, esnaf.NaceKodu, esnaf.NaceAdi,
+            Yetkililer = esnaf.Yetkililer.Select(y => new { y.Id, y.AdSoyad, y.Gorevi, y.YetkiBaslangic, y.YetkiBitis }),
             Gorusmeler = esnaf.Gorusmeler.Select(g => new
             {
-                g.Id, g.Tarih, g.Sonuc, g.Not, g.TakipGerekli,
-                Gorevli = g.Gorevli?.AdSoyad,
+                g.Id, g.Sira, g.Tarih, g.Sonuc, g.Not, g.TakipGerekli,
+                g.GorevliId, Gorevli = g.Gorevli?.AdSoyad,
             }),
         });
     }
@@ -118,6 +185,11 @@ public class EsnaflarController(EtsoDbContext db) : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(dto.AdSoyad) || string.IsNullOrWhiteSpace(dto.Isletme))
             return BadRequest(new { mesaj = "Ad soyad ve işletme adı zorunludur." });
+
+        if (!string.IsNullOrWhiteSpace(dto.UyelikDurumu) && !UyelikDurumlari.Contains(dto.UyelikDurumu))
+            return BadRequest(new { mesaj = $"Geçersiz üyelik durumu. Geçerli değerler: {string.Join(", ", UyelikDurumlari)}" });
+        if (!string.IsNullOrWhiteSpace(dto.UyeSicilNo) && await db.Esnaflar.AnyAsync(e => e.UyeSicilNo == dto.UyeSicilNo))
+            return BadRequest(new { mesaj = $"'{dto.UyeSicilNo}' üye sicil numarası zaten kayıtlı." });
 
         var esnaf = new Esnaf
         {
@@ -133,6 +205,7 @@ public class EsnaflarController(EtsoDbContext db) : ControllerBase
             GorevliId = dto.GorevliId,
             Durum = string.IsNullOrWhiteSpace(dto.Durum) ? "Görüşülmedi" : dto.Durum,
         };
+        OdaBilgileriniYaz(esnaf, dto);
         db.Esnaflar.Add(esnaf);
         await db.SaveChangesAsync();
         return CreatedAtAction(nameof(Getir), new { id = esnaf.Id }, new { esnaf.Id });
@@ -144,6 +217,10 @@ public class EsnaflarController(EtsoDbContext db) : ControllerBase
     {
         var esnaf = await db.Esnaflar.FindAsync(id);
         if (esnaf is null) return NotFound();
+        if (!string.IsNullOrWhiteSpace(dto.UyelikDurumu) && !UyelikDurumlari.Contains(dto.UyelikDurumu))
+            return BadRequest(new { mesaj = $"Geçersiz üyelik durumu. Geçerli değerler: {string.Join(", ", UyelikDurumlari)}" });
+        if (!string.IsNullOrWhiteSpace(dto.UyeSicilNo) && await db.Esnaflar.AnyAsync(e => e.UyeSicilNo == dto.UyeSicilNo && e.Id != id))
+            return BadRequest(new { mesaj = $"'{dto.UyeSicilNo}' üye sicil numarası başka bir üyede kayıtlı." });
 
         esnaf.AdSoyad = dto.AdSoyad.Trim();
         esnaf.Isletme = dto.Isletme.Trim();
@@ -156,6 +233,7 @@ public class EsnaflarController(EtsoDbContext db) : ControllerBase
         esnaf.Telefon = dto.Telefon;
         esnaf.GorevliId = dto.GorevliId;
         if (!string.IsNullOrWhiteSpace(dto.Durum)) esnaf.Durum = dto.Durum;
+        OdaBilgileriniYaz(esnaf, dto);
         await db.SaveChangesAsync();
         return NoContent();
     }
@@ -171,10 +249,47 @@ public class EsnaflarController(EtsoDbContext db) : ControllerBase
         return NoContent();
     }
 
+    // Kolon düzeni odanın "ÜYE LİSTE DETAY RAPORU" çıktısıyla hizalıdır; içe aktarma da bu başlıkları okur.
     private static readonly string[] ExcelBasliklari =
-        ["Ad Soyad", "İşletme", "Telefon", "Grup", "Görevli", "İl", "İlçe", "Mahalle", "Adres", "Vergi No", "Durum"];
+    [
+        "Üye Sicil No", "Unvan", "Yetkili Adı Soyadı", "Görevi", "Şirket Tipi", "Ticaret Sicil No",
+        "Meslek Grubu", "Üyelik Durumu", "Durum Değişim Tarihi", "Durum Değişim Nedeni",
+        "Vergi Dairesi", "Vergi No", "Kuruluş Tarihi", "Üye Kayıt Tarihi",
+        "İş Telefonu", "Cep Telefonu (GSM)", "İl", "İlçe", "Mahalle", "Adres",
+        "NACE Faaliyet Kodu", "NACE Faaliyet Adı", "Faaliyet Detayı", "Görevli", "Onay Durumu",
+    ];
+
+    /// <summary>Süzgeç dizisi gerçekten değer taşıyor mu (boş dizi "süzme yok" demektir).</summary>
+    private static bool Dolu<T>(List<T>? deger) => deger is { Count: > 0 };
 
     private static readonly string[] GecerliDurumlar = ["Onay Verdi", "Onay Vermedi", "Kararsız", "Görüşülmedi"];
+
+    private static string[] UyelikDurumlari => UyeIceAktarmaServisi.UyelikDurumlari;
+
+    /// <summary>Oda kayıt bilgilerini (sicil, şirket tipi, üyelik durumu, NACE vb.) DTO'dan kayda geçirir.</summary>
+    private static void OdaBilgileriniYaz(Esnaf esnaf, EsnafYazDto dto)
+    {
+        esnaf.UyeSicilNo = dto.UyeSicilNo;
+        esnaf.TicaretSicilNo = dto.TicaretSicilNo;
+        esnaf.SirketTipi = dto.SirketTipi;
+        esnaf.TabelaUnvani = dto.TabelaUnvani;
+        esnaf.Uyruk = dto.Uyruk;
+        esnaf.Sermaye = dto.Sermaye;
+        esnaf.Derece = dto.Derece;
+        esnaf.VergiDairesi = dto.VergiDairesi;
+        esnaf.VergiTerkTarihi = dto.VergiTerkTarihi;
+        esnaf.KurulusTarihi = dto.KurulusTarihi;
+        esnaf.OdaKararTarihi = dto.OdaKararTarihi;
+        esnaf.DurumDegisimTarihi = dto.DurumDegisimTarihi;
+        esnaf.DurumDegisimNedeni = dto.DurumDegisimNedeni;
+        esnaf.FaaliyetDetayi = dto.FaaliyetDetayi;
+        esnaf.NaceKodu = dto.NaceKodu;
+        esnaf.NaceAdi = dto.NaceAdi;
+        esnaf.Gorevi = dto.Gorevi;
+        esnaf.IsTelefonu = dto.IsTelefonu;
+        if (!string.IsNullOrWhiteSpace(dto.UyelikDurumu)) esnaf.UyelikDurumu = dto.UyelikDurumu;
+        if (dto.KayitTarihi is not null) esnaf.KayitTarihi = dto.KayitTarihi.Value;
+    }
 
     [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Yönetici")]
     [HttpGet("sablon")]
@@ -182,7 +297,14 @@ public class EsnaflarController(EtsoDbContext db) : ControllerBase
     {
         var ornek = new object?[][]
         {
-            ["Örnek ÜYE", "Örnek Ticaret", "0532 000 00 00", "Otomotiv", "Ahmet Yılmaz", "Erzurum", "Yakutiye", "Lalapaşa", "Örnek Mah. Örnek Cad. No: 1", "1234567890", "Görüşülmedi"],
+            [
+                "10036", "ÖRNEK TİCARET LİMİTED ŞİRKETİ", "Örnek Yetkili", "MÜDÜR", "LİMİTED ŞİRKET", "5735",
+                "13.HIRDAVAT ÜRÜNLERİNİN TOPTAN VE PERAKENDE TİCARETİ", "Faal", "09/05/1979", "",
+                "Aziziye V.D.", "1234567890", "20/12/1978", "09/05/1979",
+                "4422130092", "5426442075", "Erzurum", "Yakutiye", "Lalapaşa", "Örnek Mah. Örnek Cad. No: 1",
+                "47.52.02", "Hırdavat (nalburiye) ve el aletleri perakende ticareti", "İNŞAAT MALZEMELERİ TİCARETİ.",
+                "Ahmet Yılmaz", "Görüşülmedi",
+            ],
         };
         var dosya = ExcelServisi.Olustur("Üyeler", ExcelBasliklari, ornek);
         return File(dosya, ExcelServisi.IcerikTipi, "uye-ice-aktarma-sablonu.xlsx");
@@ -190,20 +312,42 @@ public class EsnaflarController(EtsoDbContext db) : ControllerBase
 
     [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Yönetici")]
     [HttpGet("disa-aktar")]
-    public async Task<IActionResult> DisaAktar([FromQuery] string? durum, [FromQuery] int? grupId, [FromQuery] int? gorevliId, [FromQuery] string? ilce, [FromQuery] string? arama)
+    public async Task<IActionResult> DisaAktar(
+        [FromQuery] List<string>? durum, [FromQuery] List<string>? uyelikDurumu, [FromQuery] List<int>? grupId,
+        [FromQuery] List<int>? gorevliId, [FromQuery] List<int>? gorusenId, [FromQuery] List<string>? ilce,
+        [FromQuery] bool? takipGerekli, [FromQuery] bool? gorusuldu, [FromQuery] string? arama)
     {
         var sorgu = db.Esnaflar.AsNoTracking().Include(e => e.Grup).Include(e => e.Gorevli).AsQueryable();
-        if (!string.IsNullOrWhiteSpace(durum)) sorgu = sorgu.Where(e => e.Durum == durum);
-        if (grupId is not null) sorgu = sorgu.Where(e => e.GrupId == grupId);
-        if (gorevliId is not null) sorgu = sorgu.Where(e => e.GorevliId == gorevliId);
-        if (!string.IsNullOrWhiteSpace(ilce)) sorgu = sorgu.Where(e => e.Ilce == ilce);
+        // Aynı süzgeçte birden çok değer VEYA, farklı süzgeçler VE ile birleşir:
+        // "(2. veya 5. grup) VE (onay verdi veya kararsız)".
+        if (Dolu(durum)) sorgu = sorgu.Where(e => durum!.Contains(e.Durum));
+        if (Dolu(uyelikDurumu)) sorgu = sorgu.Where(e => uyelikDurumu!.Contains(e.UyelikDurumu));
+        if (Dolu(grupId)) sorgu = sorgu.Where(e => e.GrupId != null && grupId!.Contains(e.GrupId.Value));
+        if (Dolu(gorevliId)) sorgu = sorgu.Where(e => e.GorevliId != null && gorevliId!.Contains(e.GorevliId.Value));
+        // "Görüşen çalışan": üyeye atanan kişi değil, üyeyle fiilen görüşme yapmış çalışan.
+        if (Dolu(gorusenId)) sorgu = sorgu.Where(e => e.Gorusmeler.Any(g => gorusenId!.Contains(g.GorevliId)));
+        if (takipGerekli is not null)
+            sorgu = takipGerekli.Value
+                ? sorgu.Where(e => e.Gorusmeler.Any(g => g.TakipGerekli))
+                : sorgu.Where(e => !e.Gorusmeler.Any(g => g.TakipGerekli));
+        if (gorusuldu is not null)
+            sorgu = gorusuldu.Value ? sorgu.Where(e => e.Gorusmeler.Any()) : sorgu.Where(e => !e.Gorusmeler.Any());
+        if (Dolu(ilce)) sorgu = sorgu.Where(e => e.Ilce != null && ilce!.Contains(e.Ilce));
         if (!string.IsNullOrWhiteSpace(arama))
-            sorgu = sorgu.Where(e => e.AdSoyad.Contains(arama) || e.Isletme.Contains(arama) || (e.Telefon != null && e.Telefon.Contains(arama)));
+            sorgu = sorgu.Where(e => e.AdSoyad.Contains(arama) || e.Isletme.Contains(arama)
+                || (e.Telefon != null && e.Telefon.Contains(arama))
+                || (e.UyeSicilNo != null && e.UyeSicilNo.Contains(arama))
+                || (e.TicaretSicilNo != null && e.TicaretSicilNo.Contains(arama)));
 
-        var kayitlar = await sorgu.OrderBy(e => e.AdSoyad).ToListAsync();
+        var kayitlar = await sorgu.OrderBy(e => e.Isletme).ToListAsync();
         var satirlar = kayitlar.Select(e => new object?[]
         {
-            e.AdSoyad, e.Isletme, e.Telefon, e.Grup?.Ad, e.Gorevli?.AdSoyad, e.Il, e.Ilce, e.Mahalle, e.Adres, e.VergiNo, e.Durum,
+            e.UyeSicilNo, e.Isletme, e.AdSoyad, e.Gorevi, e.SirketTipi, e.TicaretSicilNo,
+            e.Grup is null ? null : (e.Grup.No is null ? e.Grup.Ad : $"{e.Grup.No}.{e.Grup.Ad}"),
+            e.UyelikDurumu, e.DurumDegisimTarihi, e.DurumDegisimNedeni,
+            e.VergiDairesi, e.VergiNo, e.KurulusTarihi, e.KayitTarihi,
+            e.IsTelefonu, e.Telefon, e.Il, e.Ilce, e.Mahalle, e.Adres,
+            e.NaceKodu, e.NaceAdi, e.FaaliyetDetayi, e.Gorevli?.AdSoyad, e.Durum,
         });
         var dosya = ExcelServisi.Olustur("Üyeler", ExcelBasliklari, satirlar);
         return File(dosya, ExcelServisi.IcerikTipi, $"uyeler-{DateTime.Now:yyyyMMdd-HHmm}.xlsx");
@@ -225,6 +369,11 @@ public class EsnaflarController(EtsoDbContext db) : ControllerBase
             await using var akis = dosya.OpenReadStream();
             satirlar = ExcelServisi.Oku(akis);
         }
+        catch (InvalidOperationException e)
+        {
+            // Satır tavanı gibi anlaşılır sınır hataları kullanıcıya olduğu gibi iletilir.
+            return BadRequest(new { mesaj = e.Message });
+        }
         catch
         {
             return BadRequest(new { mesaj = "Dosya okunamadı. Geçerli bir Excel (.xlsx) dosyası olduğundan emin olun." });
@@ -232,139 +381,6 @@ public class EsnaflarController(EtsoDbContext db) : ControllerBase
         if (satirlar.Count == 0)
             return BadRequest(new { mesaj = "Dosyada veri satırı bulunamadı. Şablonu indirip doldurun." });
 
-        var gruplar = await db.Gruplar.ToListAsync();
-        var gorevliler = await db.Kullanicilar.ToListAsync();
-        var mevcutlar = (await db.Esnaflar.Select(e => new { e.AdSoyad, e.Isletme }).ToListAsync())
-            .Select(e => $"{e.AdSoyad}|{e.Isletme}".ToLowerInvariant()).ToHashSet();
-
-        var hatalar = new List<string>();
-        var eklenen = 0;
-        var atlanan = 0;
-
-        string? Al(Dictionary<string, string> d, params string[] basliklar)
-        {
-            foreach (var baslik in basliklar)
-                if (d.TryGetValue(ExcelServisi.Normalize(baslik), out var deger) && !string.IsNullOrWhiteSpace(deger))
-                    return deger.Trim();
-            return null;
-        }
-
-        static string? AdrestenIlce(string? adres)
-        {
-            if (string.IsNullOrWhiteSpace(adres)) return null;
-            string[] ilceler =
-            [
-                "Yakutiye", "Palandöken", "Aziziye", "Aşkale", "Çat", "Hınıs", "Horasan", "İspir",
-                "Karaçoban", "Karayazı", "Köprüköy", "Narman", "Oltu", "Olur", "Pasinler",
-                "Pazaryolu", "Şenkaya", "Tekman", "Tortum", "Uzundere"
-            ];
-            return ilceler.FirstOrDefault(ilce => adres.Contains(ilce, StringComparison.CurrentCultureIgnoreCase));
-        }
-
-        static string? AdrestenMahalle(string? adres)
-        {
-            if (string.IsNullOrWhiteSpace(adres)) return null;
-            var eslesme = System.Text.RegularExpressions.Regex.Match(adres,
-                @"(?:^|\s)([\p{L}\s]+?)\s+MAHALLES[İI]", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            if (!eslesme.Success) return null;
-            var mahalle = eslesme.Groups[1].Value.Trim();
-            var sonAyirac = mahalle.LastIndexOfAny(['/', ',']);
-            return (sonAyirac >= 0 ? mahalle[(sonAyirac + 1)..] : mahalle).Trim();
-        }
-
-        // "YUSUF KARATAŞ , ÖMER KARATAŞ" gibi çoklu yetkili listelerinden ilk kişiyi alır.
-        static string? IlkYetkili(string? ham) =>
-            string.IsNullOrWhiteSpace(ham) ? null : ham.Split(',', ';')[0].Trim();
-
-        static string? BaslikYap(string? metin)
-        {
-            if (string.IsNullOrWhiteSpace(metin)) return metin;
-            var tr = System.Globalization.CultureInfo.GetCultureInfo("tr-TR");
-            return tr.TextInfo.ToTitleCase(metin.ToLower(tr));
-        }
-
-        // "4422341515,4422349750" → ilk numara; 10-11 haneliler "0442 234 15 15" biçimine getirilir.
-        static string? TelefonDuzenle(string? ham)
-        {
-            if (string.IsNullOrWhiteSpace(ham)) return null;
-            var ilk = ham.Split(',', ';')[0].Trim();
-            if (ilk.Length == 0) return null;
-            var rakamlar = new string(ilk.Where(char.IsDigit).ToArray());
-            if (rakamlar.StartsWith("90") && rakamlar.Length == 12) rakamlar = rakamlar[2..];
-            if (rakamlar.Length == 10) rakamlar = "0" + rakamlar;
-            if (rakamlar.Length == 11 && rakamlar[0] == '0')
-                return $"{rakamlar[..4]} {rakamlar[4..7]} {rakamlar[7..9]} {rakamlar[9..]}";
-            return ilk.Length <= 30 ? ilk : ilk[..30];
-        }
-
-        static string? Kirp(string? metin, int enFazla) =>
-            metin is null ? null : (metin.Length <= enFazla ? metin : metin[..enFazla]);
-
-        foreach (var (satirNo, degerler) in satirlar)
-        {
-            var isletme = Kirp(Al(degerler, "İşletme", "Unvan", "Ünvan", "Firma Unvanı", "Ticaret Unvanı"), 160);
-            var adSoyad = BaslikYap(IlkYetkili(Al(degerler, "Ad Soyad", "Yetkili Adı Soyadı", "Yetkili", "İsim Soyisim")));
-            if (isletme is null)
-            {
-                hatalar.Add($"Satır {satirNo}: İşletme/unvan bilgisi bulunamadı.");
-                continue;
-            }
-            // Bazı oda raporlarında yetkili alanı boş bırakılır. Kaydı kaybetmemek için unvanı kullanırız.
-            adSoyad = Kirp(adSoyad ?? isletme, 120)!;
-            if (!mevcutlar.Add($"{adSoyad}|{isletme}".ToLowerInvariant()))
-            {
-                atlanan++;
-                continue;
-            }
-
-            var grupAdi = Al(degerler, "Grup", "Meslek Grubu", "Meslek Komitesi");
-            Grup? grup = null;
-            if (grupAdi is not null)
-            {
-                grup = gruplar.FirstOrDefault(g => string.Equals(g.Ad, grupAdi, StringComparison.OrdinalIgnoreCase));
-                if (grup is null)
-                {
-                    grup = new Grup { Ad = grupAdi, Aciklama = "Excel içe aktarmayla oluşturuldu" };
-                    db.Gruplar.Add(grup);
-                    gruplar.Add(grup);
-                }
-            }
-
-            var gorevliAdi = Al(degerler, "Görevli", "Atanan Görevli");
-            Kullanici? gorevli = null;
-            if (gorevliAdi is not null)
-            {
-                gorevli = gorevliler.FirstOrDefault(k => string.Equals(k.AdSoyad, gorevliAdi, StringComparison.OrdinalIgnoreCase));
-                if (gorevli is null) hatalar.Add($"Satır {satirNo}: '{gorevliAdi}' adlı görevli bulunamadı, görevli boş bırakıldı.");
-            }
-
-            var durum = Al(degerler, "Durum", "Onay Durumu", "Görüşme Durumu") ?? "Görüşülmedi";
-            if (!GecerliDurumlar.Contains(durum))
-            {
-                hatalar.Add($"Satır {satirNo}: '{durum}' geçersiz durum, 'Görüşülmedi' olarak kaydedildi.");
-                durum = "Görüşülmedi";
-            }
-
-            var adres = Al(degerler, "Adres", "Tescil Adresi");
-            var telefon = TelefonDuzenle(Al(degerler, "Telefon", "Cep Telefonu (GSM)", "Cep Telefonu", "GSM", "İş Telefonu"));
-            db.Esnaflar.Add(new Esnaf
-            {
-                AdSoyad = adSoyad,
-                Isletme = isletme,
-                Telefon = telefon,
-                Grup = grup,
-                Gorevli = gorevli,
-                Il = Al(degerler, "İl") ?? "Erzurum",
-                Ilce = Al(degerler, "İlçe") ?? AdrestenIlce(adres),
-                Mahalle = Kirp(BaslikYap(Al(degerler, "Mahalle") ?? AdrestenMahalle(adres)), 80),
-                Adres = Kirp(adres, 500),
-                VergiNo = Kirp(Al(degerler, "Vergi No", "Vergi Numarası"), 20),
-                Durum = durum,
-            });
-            eklenen++;
-        }
-
-        await db.SaveChangesAsync();
-        return Ok(new IceAktarmaSonucu(eklenen, atlanan, hatalar));
+        return Ok(await UyeIceAktarmaServisi.AktarAsync(db, satirlar));
     }
 }

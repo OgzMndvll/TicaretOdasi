@@ -13,3 +13,9 @@ backend/EtsoApi/appsettings.Development.json
 backend/EtsoApi/logs/
 backend/EtsoApi/bin/
 backend/EtsoApi/obj/
+
+# Gerçek üye verisi: depo herkese açık olduğu için veri dosyaları versiyonlanmaz
+backups/
+*.xlsx
+*.xls
+*.csv

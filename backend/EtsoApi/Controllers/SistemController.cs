@@ -23,16 +23,20 @@ public class SistemController(EtsoDbContext db, IWebHostEnvironment ortam) : Con
             kullanicilar = await db.Kullanicilar.AsNoTracking().ToListAsync(),
             esnaflar = await db.Esnaflar.AsNoTracking().Select(e => new
             {
-                e.Id, e.AdSoyad, e.Isletme, e.VergiNo, e.GrupId, e.Ilce, e.Mahalle,
-                e.Telefon, e.GorevliId, e.Durum, e.SonGorusmeTarihi, e.KayitTarihi,
+                e.Id, e.UyeSicilNo, e.TicaretSicilNo, e.AdSoyad, e.Isletme, e.TabelaUnvani, e.Gorevi,
+                e.SirketTipi, e.Uyruk, e.Sermaye, e.Derece, e.VergiDairesi, e.VergiNo, e.VergiTerkTarihi,
+                e.GrupId, e.UyelikDurumu, e.DurumDegisimTarihi, e.DurumDegisimNedeni,
+                e.NaceKodu, e.NaceAdi, e.FaaliyetDetayi, e.Il, e.Ilce, e.Mahalle, e.Adres,
+                e.Telefon, e.IsTelefonu, e.GorevliId, e.Durum, e.SonGorusmeTarihi, e.KurulusTarihi, e.OdaKararTarihi, e.KayitTarihi,
             }).ToListAsync(),
+            esnafYetkilileri = await db.EsnafYetkilileri.AsNoTracking().ToListAsync(),
             gorusmeler = await db.Gorusmeler.AsNoTracking().Select(g => new
             {
                 g.Id, g.EsnafId, g.GorevliId, g.Tarih, g.Sonuc, g.Not, g.TakipGerekli,
             }).ToListAsync(),
             gorevlendirmeler = await db.Gorevlendirmeler.AsNoTracking().Select(g => new
             {
-                g.Id, g.GorevliId, g.EsnafId, g.GrupId, g.Tarih, g.Not, g.Durum,
+                g.Id, g.GorevliId, g.EsnafId, g.GrupId, g.Tarih, g.Not, g.Durum, g.RedMazereti, g.KararTarihi,
             }).ToListAsync(),
             onaylar = await db.Onaylar.AsNoTracking().Select(o => new
             {
@@ -80,10 +84,20 @@ public class SistemController(EtsoDbContext db, IWebHostEnvironment ortam) : Con
             sayfa.Columns().AdjustToContents(1, Math.Min(satirNo, 50));
         }
 
-        var esnaflar = await db.Esnaflar.AsNoTracking().Include(e => e.Grup).Include(e => e.Gorevli).OrderBy(e => e.AdSoyad).ToListAsync();
+        var esnaflar = await db.Esnaflar.AsNoTracking().Include(e => e.Grup).Include(e => e.Gorevli).OrderBy(e => e.Isletme).ToListAsync();
         SayfaEkle("Üyeler",
-            ["Ad Soyad", "İşletme", "Telefon", "Grup", "Görevli", "İlçe", "Mahalle", "Vergi No", "Durum", "Son Görüşme"],
-            esnaflar.Select(e => new object?[] { e.AdSoyad, e.Isletme, e.Telefon, e.Grup?.Ad, e.Gorevli?.AdSoyad, e.Ilce, e.Mahalle, e.VergiNo, e.Durum, e.SonGorusmeTarihi }));
+            ["Üye Sicil No", "Unvan", "Yetkili", "Görevi", "Şirket Tipi", "Ticaret Sicil No", "Meslek Grubu",
+             "Üyelik Durumu", "Durum Değişim Tarihi", "Durum Değişim Nedeni", "Vergi Dairesi", "Vergi No",
+             "İş Telefonu", "Cep Telefonu", "İlçe", "Mahalle", "NACE Kodu", "NACE Faaliyet Adı",
+             "Görevli", "Onay Durumu", "Son Görüşme"],
+            esnaflar.Select(e => new object?[]
+            {
+                e.UyeSicilNo, e.Isletme, e.AdSoyad, e.Gorevi, e.SirketTipi, e.TicaretSicilNo,
+                e.Grup != null && e.Grup.No != null ? $"{e.Grup.No}. {e.Grup.Ad}" : e.Grup?.Ad,
+                e.UyelikDurumu, e.DurumDegisimTarihi, e.DurumDegisimNedeni, e.VergiDairesi, e.VergiNo,
+                e.IsTelefonu, e.Telefon, e.Ilce, e.Mahalle, e.NaceKodu, e.NaceAdi,
+                e.Gorevli?.AdSoyad, e.Durum, e.SonGorusmeTarihi,
+            }));
 
         var gorusmeler = await db.Gorusmeler.AsNoTracking().Include(g => g.Esnaf).Include(g => g.Gorevli).OrderByDescending(g => g.Tarih).ToListAsync();
         SayfaEkle("Görüşmeler",
@@ -92,18 +106,18 @@ public class SistemController(EtsoDbContext db, IWebHostEnvironment ortam) : Con
 
         var gorevlendirmeler = await db.Gorevlendirmeler.AsNoTracking().Include(g => g.Esnaf).Include(g => g.Gorevli).Include(g => g.Grup).OrderByDescending(g => g.Tarih).ToListAsync();
         SayfaEkle("Görevlendirmeler",
-            ["Görevli", "Üye", "Grup", "Tarih", "Durum", "Not"],
-            gorevlendirmeler.Select(g => new object?[] { g.Gorevli?.AdSoyad, g.Esnaf?.AdSoyad, g.Grup?.Ad, g.Tarih, g.Durum, g.Not }));
+            ["Görevli", "Üye", "Grup", "Tarih", "Durum", "Karar Tarihi", "Ret Mazereti", "Not"],
+            gorevlendirmeler.Select(g => new object?[] { g.Gorevli?.AdSoyad, g.Esnaf?.AdSoyad, g.Grup?.Ad, g.Tarih, g.Durum, g.KararTarihi, g.RedMazereti, g.Not }));
 
         var onaylar = await db.Onaylar.AsNoTracking().Include(o => o.Esnaf).Include(o => o.Gorevli).OrderByDescending(o => o.Tarih).ToListAsync();
         SayfaEkle("Onaylar",
             ["Üye", "İşlem Türü", "Görevli", "Tarih", "Durum"],
             onaylar.Select(o => new object?[] { o.Esnaf?.AdSoyad, o.IslemTuru, o.Gorevli?.AdSoyad, o.Tarih, o.Durum }));
 
-        var gruplar = await db.Gruplar.AsNoTracking().OrderBy(g => g.Ad).ToListAsync();
+        var gruplar = await db.Gruplar.AsNoTracking().OrderBy(g => g.No == null).ThenBy(g => g.No).ThenBy(g => g.Ad).ToListAsync();
         SayfaEkle("Gruplar",
-            ["Ad", "Açıklama", "Tür", "Durum", "Güncelleme"],
-            gruplar.Select(g => new object?[] { g.Ad, g.Aciklama, g.Tur, g.Durum, g.GuncellemeTarihi }));
+            ["No", "Ad", "Açıklama", "Tür", "Durum", "Güncelleme"],
+            gruplar.Select(g => new object?[] { g.No, g.Ad, g.Aciklama, g.Tur, g.Durum, g.GuncellemeTarihi }));
 
         var kullanicilar = await db.Kullanicilar.AsNoTracking().OrderBy(k => k.AdSoyad).ToListAsync();
         SayfaEkle("Kullanıcılar",

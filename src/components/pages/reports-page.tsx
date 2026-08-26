@@ -20,7 +20,7 @@ export function ReportsPage() {
     api.get<GrupRaporSatiri[]>("/api/raporlar/gruplar").then(setRapor).catch(() => {});
   }, []);
 
-  const toplamGorusme = ozet?.aylikGorusmeler.reduce((t, a) => t + a.adet, 0) ?? 0;
+  const toplamGorusme = ozet?.aralikGorusme ?? 0;
 
   return <AppShell title="Raporlar">
     {hata && <section className="panel"><p role="alert">{hata}</p></section>}
@@ -40,8 +40,8 @@ export function ReportsPage() {
           { label: "Görüşülmemiş", value: ozet.gorusulmemis, color: "gray" },
         ] : []} />
       </section>
-      <section className="panel"><h2>Aylara Göre Görüşme Trendi <small>(son 8 ay: {sayiGoster(toplamGorusme)} görüşme)</small></h2><LineChart data={ozet?.aylikGorusmeler ?? []} /></section>
-      <section className="panel"><h2>Görevlilere Göre Performans</h2><BarList items={(ozet?.gorevliPerformans ?? []).map(p => ({ name: p.adSoyad, value: p.adet }))} /></section>
+      <section className="panel"><h2>Günlük Görüşme Trendi <small>(son 30 gün: {sayiGoster(toplamGorusme)} görüşme)</small></h2><LineChart data={ozet?.gunlukGorusmeler ?? []} /></section>
+      <section className="panel"><h2>Çalışanlara Göre Performans</h2><BarList items={(ozet?.gorevliPerformans ?? []).map(p => ({ name: p.adSoyad, value: p.adet }))} /></section>
     </div>
     <section className="panel table-panel">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -54,9 +54,9 @@ export function ReportsPage() {
         </button>
       </div>
       <div className="table-scroll"><table>
-      <thead><tr><th>Grup / Meslek Grubu</th><th>Toplam Üye</th><th>Görüşme</th><th>Onaylayan</th><th>Reddedilen</th><th>Kararsız</th><th>Görüşülmeyen</th><th>Onay Oranı</th></tr></thead>
+      <thead><tr><th>No</th><th>Grup / Meslek Grubu</th><th>Toplam Üye</th><th>Görüşme</th><th>Onaylayan</th><th>Reddedilen</th><th>Kararsız</th><th>Görüşülmeyen</th><th>Onay Oranı</th></tr></thead>
       <tbody>{rapor.map(r => <tr key={r.id}>
-        <td><strong>{r.ad}</strong></td><td>{sayiGoster(r.toplamEsnaf)}</td><td>{sayiGoster(r.gorusme)}</td>
+        <td>{r.no ?? "-"}</td><td><strong>{r.ad}</strong></td><td>{sayiGoster(r.toplamEsnaf)}</td><td>{sayiGoster(r.gorusme)}</td>
         <td>{sayiGoster(r.onaylayan)}</td><td>{sayiGoster(r.reddedilen)}</td><td>{sayiGoster(r.kararsiz)}</td><td>{sayiGoster(r.gorusulmeyen)}</td>
         <td><span className="ratio"><i style={{ width: `${Math.min(100, r.onayOrani)}%` }} />%{r.onayOrani.toLocaleString("tr-TR")}</span></td>
       </tr>)}</tbody>

@@ -1,1 +1,4 @@
-import { ModulePage } from "@/components/pages/module-page"; export default function Page(){return <ModulePage kind="kullanicilar"/>}
+import { redirect } from "next/navigation";
+
+// Kullanıcılar ekranı "Aktif Çalışanlar" olarak yeniden adlandırıldı; eski bağlantılar yönlendirilir.
+export default function Page() { redirect("/calisanlar"); }

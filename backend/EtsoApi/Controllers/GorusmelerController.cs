@@ -11,16 +11,14 @@ public class GorusmelerController(EtsoDbContext db) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> Listele(
-        [FromQuery] int? esnafId, [FromQuery] int? gorevliId, [FromQuery] string? sonuc,
+        [FromQuery] int? esnafId, [FromQuery] int? gorevliId, [FromQuery] int? grupId, [FromQuery] string? sonuc,
         [FromQuery] bool? takipGerekli, [FromQuery] DateTime? baslangic, [FromQuery] DateTime? bitis,
         [FromQuery] int sayfa = 1, [FromQuery] int sayfaBoyutu = 20)
     {
-        // Görevli rolü yalnızca kendi görüşmelerini görebilir.
-        if (!User.Yonetici()) gorevliId = User.KullaniciId();
-
         var sorgu = db.Gorusmeler.AsNoTracking();
         if (esnafId is not null) sorgu = sorgu.Where(g => g.EsnafId == esnafId);
         if (gorevliId is not null) sorgu = sorgu.Where(g => g.GorevliId == gorevliId);
+        if (grupId is not null) sorgu = sorgu.Where(g => g.Esnaf!.GrupId == grupId);
         if (!string.IsNullOrWhiteSpace(sonuc)) sorgu = sorgu.Where(g => g.Sonuc == sonuc);
         if (takipGerekli is not null) sorgu = sorgu.Where(g => g.TakipGerekli == takipGerekli);
         if (baslangic is not null) sorgu = sorgu.Where(g => g.Tarih >= baslangic);
@@ -36,11 +34,12 @@ public class GorusmelerController(EtsoDbContext db) : ControllerBase
             .Take(sayfaBoyutu)
             .Select(g => new
             {
-                g.Id, g.Tarih, g.Sonuc, g.Not, g.TakipGerekli,
+                g.Id, g.Tarih, g.Sonuc, g.Not, g.TakipGerekli, g.Sira,
                 g.EsnafId,
                 Esnaf = g.Esnaf!.AdSoyad,
                 Isletme = g.Esnaf.Isletme,
                 Grup = g.Esnaf.Grup != null ? g.Esnaf.Grup.Ad : null,
+                GrupNo = g.Esnaf.Grup != null ? g.Esnaf.Grup.No : null,
                 Ilce = g.Esnaf.Ilce,
                 Mahalle = g.Esnaf.Mahalle,
                 Telefon = g.Esnaf.Telefon,
@@ -57,7 +56,6 @@ public class GorusmelerController(EtsoDbContext db) : ControllerBase
     public async Task<IActionResult> Istatistik()
     {
         var kaynak = db.Gorusmeler.AsNoTracking();
-        if (!User.Yonetici()) kaynak = kaynak.Where(g => g.GorevliId == User.KullaniciId());
 
         var toplam = await kaynak.CountAsync();
         var bugun = DateTime.UtcNow.Date;
@@ -103,23 +101,25 @@ public class GorusmelerController(EtsoDbContext db) : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Olustur(GorusmeYazDto dto)
     {
-        // Görevli, yalnızca kendi adına görüşme kaydedebilir.
-        var gorevliId = User.Yonetici() ? dto.GorevliId : User.KullaniciId() ?? dto.GorevliId;
+        var gorevliId = dto.GorevliId;
 
         var esnaf = await db.Esnaflar.FindAsync(dto.EsnafId);
         if (esnaf is null) return BadRequest(new { mesaj = "Üye bulunamadı." });
         if (!await db.Kullanicilar.AnyAsync(k => k.Id == gorevliId))
             return BadRequest(new { mesaj = "Görevli bulunamadı." });
 
-        // Görevli, yalnızca kendisine atanmış aktif bir üye için görüşme kaydedebilir.
-        if (!User.Yonetici() && !await db.Gorevlendirmeler.AnyAsync(g =>
-                g.EsnafId == dto.EsnafId && g.GorevliId == gorevliId && g.Durum == "Aktif"))
-            return BadRequest(new { mesaj = "Bu üye için aktif bir görevlendirmeniz bulunmuyor." });
+        // Kaçıncı görüşme olduğu formda seçilebilir; seçilmezse sıradaki numara verilir.
+        // Üst sınır mevcut görüşme sayısının bir fazlasıdır: numara atlanarak boşluk bırakılamaz.
+        var mevcutSayi = await db.Gorusmeler.CountAsync(g => g.EsnafId == dto.EsnafId);
+        var sira = dto.Sira ?? mevcutSayi + 1;
+        if (sira < 1 || sira > mevcutSayi + 1)
+            return BadRequest(new { mesaj = $"Görüşme sırası 1 ile {mevcutSayi + 1} arasında olmalıdır." });
 
         var gorusme = new Gorusme
         {
             EsnafId = dto.EsnafId,
             GorevliId = gorevliId,
+            Sira = sira,
             Tarih = dto.Tarih == default ? DateTime.UtcNow : dto.Tarih,
             Sonuc = string.IsNullOrWhiteSpace(dto.Sonuc) ? "Kararsız" : dto.Sonuc,
             Not = dto.Not,
@@ -134,11 +134,6 @@ public class GorusmelerController(EtsoDbContext db) : ControllerBase
             esnaf.Durum = gorusme.Sonuc;
         }
 
-        // Görüşme yapıldığında bu üye için aktif görevlendirme otomatik tamamlanır.
-        var acikGorevlendirme = await db.Gorevlendirmeler
-            .FirstOrDefaultAsync(g => g.EsnafId == dto.EsnafId && g.GorevliId == gorevliId && g.Durum == "Aktif");
-        if (acikGorevlendirme is not null) acikGorevlendirme.Durum = "Tamamlandı";
-
         await db.SaveChangesAsync();
         return CreatedAtAction(nameof(Listele), new { esnafId = gorusme.EsnafId }, new { gorusme.Id });
     }
@@ -149,14 +144,16 @@ public class GorusmelerController(EtsoDbContext db) : ControllerBase
         var gorusme = await db.Gorusmeler.FindAsync(id);
         if (gorusme is null) return NotFound();
 
-        // Görevli yalnızca kendi görüşmesini düzenleyebilir ve görüşmeyi başkasına devredemez.
-        if (!User.Yonetici())
-        {
-            if (gorusme.GorevliId != User.KullaniciId()) return Forbid();
-            dto = dto with { GorevliId = gorusme.GorevliId };
-        }
         if (!await db.Kullanicilar.AnyAsync(k => k.Id == dto.GorevliId))
             return BadRequest(new { mesaj = "Görevli bulunamadı." });
+
+        if (dto.Sira is not null)
+        {
+            var esnafGorusmeSayisi = await db.Gorusmeler.CountAsync(g => g.EsnafId == gorusme.EsnafId);
+            if (dto.Sira < 1 || dto.Sira > esnafGorusmeSayisi)
+                return BadRequest(new { mesaj = $"Görüşme sırası 1 ile {esnafGorusmeSayisi} arasında olmalıdır." });
+            gorusme.Sira = dto.Sira.Value;
+        }
 
         gorusme.GorevliId = dto.GorevliId;
         if (dto.Tarih != default) gorusme.Tarih = dto.Tarih;

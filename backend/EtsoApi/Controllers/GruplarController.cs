@@ -17,10 +17,11 @@ public class GruplarController(EtsoDbContext db) : ControllerBase
         if (!string.IsNullOrWhiteSpace(tur)) sorgu = sorgu.Where(g => g.Tur == tur);
 
         var kayitlar = await sorgu
-            .OrderBy(g => g.Ad)
+            // Meslek grupları oda numarasına göre sıralanır; numarasız gruplar sona alfabetik gelir.
+            .OrderBy(g => g.No == null).ThenBy(g => g.No).ThenBy(g => g.Ad)
             .Select(g => new
             {
-                g.Id, g.Ad, g.Aciklama, g.Tur,
+                g.Id, g.No, g.Ad, g.Aciklama, g.Tur,
                 g.UstGrupId, UstGrup = g.UstGrup != null ? g.UstGrup.Ad : null,
                 EsnafSayisi = g.Esnaflar.Count,
                 AktifGorevli = g.Esnaflar.Where(e => e.GorevliId != null).Select(e => e.GorevliId).Distinct().Count(),
@@ -45,7 +46,7 @@ public class GruplarController(EtsoDbContext db) : ControllerBase
     {
         var grup = await db.Gruplar.AsNoTracking().Include(g => g.UstGrup).FirstOrDefaultAsync(g => g.Id == id);
         if (grup is null) return NotFound();
-        return Ok(new { grup.Id, grup.Ad, grup.Aciklama, grup.Tur, grup.UstGrupId, UstGrup = grup.UstGrup?.Ad, grup.Durum, grup.GuncellemeTarihi });
+        return Ok(new { grup.Id, grup.No, grup.Ad, grup.Aciklama, grup.Tur, grup.UstGrupId, UstGrup = grup.UstGrup?.Ad, grup.Durum, grup.GuncellemeTarihi });
     }
 
     [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Yönetici")]
@@ -55,9 +56,12 @@ public class GruplarController(EtsoDbContext db) : ControllerBase
         if (string.IsNullOrWhiteSpace(dto.Ad)) return BadRequest(new { mesaj = "Grup adı zorunludur." });
         if (await db.Gruplar.AnyAsync(g => g.Ad == dto.Ad.Trim()))
             return Conflict(new { mesaj = "Bu adla bir grup zaten var." });
+        if (dto.No is not null && await db.Gruplar.AnyAsync(g => g.No == dto.No))
+            return Conflict(new { mesaj = $"{dto.No} numaralı meslek grubu zaten var." });
 
         var grup = new Grup
         {
+            No = dto.No,
             Ad = dto.Ad.Trim(),
             Aciklama = dto.Aciklama,
             Tur = string.IsNullOrWhiteSpace(dto.Tur) ? "Sektörel" : dto.Tur,
@@ -75,7 +79,10 @@ public class GruplarController(EtsoDbContext db) : ControllerBase
     {
         var grup = await db.Gruplar.FindAsync(id);
         if (grup is null) return NotFound();
+        if (dto.No is not null && await db.Gruplar.AnyAsync(g => g.No == dto.No && g.Id != id))
+            return Conflict(new { mesaj = $"{dto.No} numaralı meslek grubu başka bir kayıtta var." });
 
+        grup.No = dto.No;
         grup.Ad = dto.Ad.Trim();
         grup.Aciklama = dto.Aciklama;
         if (!string.IsNullOrWhiteSpace(dto.Tur)) grup.Tur = dto.Tur;

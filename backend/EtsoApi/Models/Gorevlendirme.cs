@@ -11,6 +11,8 @@ public class Gorevlendirme
     public Grup? Grup { get; set; }
     public DateTime Tarih { get; set; } = DateTime.UtcNow;
     public string? Not { get; set; }
-    // Aktif | Tamamlandı | İptal Edildi
-    public string Durum { get; set; } = "Aktif";
+    public string? RedMazereti { get; set; }
+    public DateTime? KararTarihi { get; set; }
+    // Bekleyen | Aktif | Reddedildi | Tamamlandı | İptal Edildi
+    public string Durum { get; set; } = "Bekleyen";
 }

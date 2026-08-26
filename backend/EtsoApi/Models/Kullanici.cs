@@ -4,6 +4,10 @@ namespace EtsoApi.Models;
 
 public class Kullanici
 {
+    /// <summary>Panele giriş yapabilen tek rol. "Görevli" kayıtları görüşmelerde seçilen çalışanlardır, giriş yapmazlar.</summary>
+    public const string YoneticiRolu = "Yönetici";
+    public const string CalisanRolu = "Görevli";
+
     public int Id { get; set; }
     public string AdSoyad { get; set; } = "";
     public string KullaniciAdi { get; set; } = "";

@@ -77,17 +77,36 @@ export interface IceAktarmaSonucu { eklenen: number; atlanan: number; hatalar: s
 
 // ---- Tipler ----
 
-export interface Sayfali<T> { toplam: number; sayfa: number; sayfaBoyutu: number; kayitlar: T[] }
+export interface Sayfali<T> {
+  toplam: number; sayfa: number; sayfaBoyutu: number; kayitlar: T[];
+  /** Listeyle aynı filtre sorgusundan atomik olarak hesaplanan özet değerler. */
+  istatistik?: Record<string, number>;
+}
+
+export interface EsnafYetkilisi {
+  id: number; adSoyad: string; gorevi?: string | null;
+  yetkiBaslangic?: string | null; yetkiBitis?: string | null;
+}
 
 export interface EsnafKaydi {
   id: number; adSoyad: string; isletme: string; vergiNo?: string | null;
-  grupId?: number | null; grup?: string | null; il?: string | null; ilce?: string | null; mahalle?: string | null;
-  adres?: string | null; telefon?: string | null; gorevliId?: number | null; gorevli?: string | null;
+  grupId?: number | null; grup?: string | null; grupNo?: number | null;
+  il?: string | null; ilce?: string | null; mahalle?: string | null;
+  adres?: string | null; telefon?: string | null; isTelefonu?: string | null;
+  gorevliId?: number | null; gorevli?: string | null;
   durum: string; sonGorusmeTarihi?: string | null; kayitTarihi: string;
+  // Oda kayıt bilgileri (ÜYE LİSTE DETAY RAPORU kolonları)
+  uyeSicilNo?: string | null; ticaretSicilNo?: string | null; sirketTipi?: string | null;
+  tabelaUnvani?: string | null; uyruk?: string | null; sermaye?: string | null; derece?: string | null;
+  vergiDairesi?: string | null; vergiTerkTarihi?: string | null;
+  kurulusTarihi?: string | null; odaKararTarihi?: string | null; gorevi?: string | null;
+  uyelikDurumu?: string | null; durumDegisimTarihi?: string | null; durumDegisimNedeni?: string | null;
+  faaliyetDetayi?: string | null; naceKodu?: string | null; naceAdi?: string | null;
+  yetkililer?: EsnafYetkilisi[];
 }
 
 export interface GrupKaydi {
-  id: number; ad: string; aciklama?: string | null; tur: string;
+  id: number; no?: number | null; ad: string; aciklama?: string | null; tur: string;
   ustGrupId?: number | null; ustGrup?: string | null;
   esnafSayisi: number; aktifGorevli: number; durum: string; guncellemeTarihi: string;
 }
@@ -100,18 +119,13 @@ export interface KullaniciKaydi {
 
 export interface GorusmeKaydi {
   id: number; tarih: string; sonuc: string; not?: string | null; takipGerekli: boolean;
-  esnafId: number; esnaf: string; isletme: string; grup?: string | null;
+  /** Üyeyle kaçıncı görüşme olduğu (1, 2, 3...). Sunucuda hesaplanır. */
+  sira: number;
+  esnafId: number; esnaf: string; isletme: string; grup?: string | null; grupNo?: number | null;
   ilce?: string | null; mahalle?: string | null; telefon?: string | null; esnafDurum: string;
   gorevliId: number; gorevli: string;
 }
 
-export interface GorevlendirmeKaydi {
-  id: number; tarih: string; not?: string | null; durum: string;
-  gorevliId: number; gorevli: string;
-  esnafId?: number | null; esnaf?: string | null; isletme?: string | null;
-  ilce?: string | null; mahalle?: string | null; telefon?: string | null;
-  grupId?: number | null; grup?: string | null;
-}
 
 export interface OnayKaydi {
   id: number; islemTuru: string; tarih: string; durum: string;
@@ -123,13 +137,19 @@ export interface OnayKaydi {
 export interface DashboardOzet {
   toplamEsnaf: number; gorusulen: number; onayVeren: number; onayVermeyen: number;
   kararsiz: number; gorusulmemis: number;
-  aylikGorusmeler: { ay: string; adet: number }[];
+  /** Seçili tarih aralığındaki görüşme sayısı. */
+  aralikGorusme: number;
+  baslangic: string; bitis: string;
+  gunlukGorusmeler: { tarih: string; ay: string; adet: number }[];
   gorevliPerformans: { adSoyad: string; adet: number }[];
-  sonGorusmeler: { id: number; tarih: string; sonuc: string; esnaf: string; isletme: string; grup?: string | null; gorevli: string }[];
+  sonGorusmeler: {
+    id: number; tarih: string; sonuc: string; sira: number; esnaf: string; isletme: string;
+    grup?: string | null; grupNo?: number | null; esnafDurum: string; gorevli: string;
+  }[];
 }
 
 export interface GrupRaporSatiri {
-  id: number; ad: string; toplamEsnaf: number; gorusme: number;
+  id: number; no?: number | null; ad: string; toplamEsnaf: number; gorusme: number;
   onaylayan: number; reddedilen: number; kararsiz: number; gorusulmeyen: number; onayOrani: number;
 }
 
@@ -139,9 +159,9 @@ export type StatusTone = "success" | "danger" | "warning" | "neutral" | "info" |
 
 export function durumTonu(durum: string): StatusTone {
   switch (durum) {
-    case "Onay Verdi": case "Onaylandı": case "Aktif": case "Tamamlandı": return "success";
+    case "Onay Verdi": case "Onaylandı": case "Aktif": case "Tamamlandı": case "Faal": return "success";
     case "Onay Vermedi": case "Reddedildi": case "İptal Edildi": return "danger";
-    case "Kararsız": case "Bekliyor": case "Bekleyen": return "warning";
+    case "Kararsız": case "Bekliyor": case "Bekleyen": case "Askı": return "warning";
     case "Görüşülmedi": case "Pasif": return "neutral";
     default: return "info";
   }

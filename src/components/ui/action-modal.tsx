@@ -5,7 +5,6 @@ import { CheckCircle2 } from "lucide-react";
 import { EsnafSecici } from "./esnaf-secici";
 import { FormField, Modal } from "./modal";
 import { api, ApiError, GrupKaydi, KullaniciKaydi } from "@/lib/api";
-import { yoneticiMi } from "@/lib/auth";
 import { ILLER, ilceleriGetir } from "@/lib/il-ilce";
 
 type Alan = {
@@ -13,7 +12,7 @@ type Alan = {
   label: string;
   tip: "text" | "email" | "date" | "textarea" | "select" | "hidden" | "password" | "tel";
   zorunlu?: boolean;
-  secenekKaynagi?: "gruplar" | "gorevliler" | "esnaflar" | "sabit" | "iller" | "ilceler";
+  secenekKaynagi?: "gruplar" | "gorevliler" | "esnaflar" | "sabit" | "iller" | "ilceler" | "gorusmeSirasi";
   sabitSecenekler?: string[];
 };
 
@@ -25,29 +24,53 @@ const telefonTemizle = (deger: string) => deger.replace(/\D/g, "").slice(0, TELE
 type KimlikBilgisi = { kullaniciAdi: string; sifre: string };
 
 const ESNAF_DURUMLARI = ["Onay Verdi", "Onay Vermedi", "Kararsız", "Görüşülmedi"];
+// Odadaki üyelik durumu (kaynak raporun "DURUM TANIMI" kolonu). Görüşme onay durumundan ayrıdır.
+const UYELIK_DURUMLARI = ["Faal", "Askı", "Pasif"];
 
 type FormTanimi = { alanlar: Alan[]; buton: string; gonder: (v: Record<string, string>) => Promise<KimlikBilgisi | void> };
 type DuzenlemeTanimi = { alanlar: Alan[]; buton: string; gonder: (id: number, v: Record<string, string>) => Promise<void> };
 
+// Alan düzeni odanın "ÜYE LİSTE DETAY RAPORU" kolonlarını izler.
 const esnafAlanlari: Alan[] = [
-  { name: "adSoyad", label: "Üye / Yetkili Adı", tip: "text", zorunlu: true },
-  { name: "isletme", label: "İş Yeri / Unvan", tip: "text", zorunlu: true },
-  { name: "telefon", label: "Telefon", tip: "tel" },
-  { name: "grupId", label: "Grup / Meslek Grubu", tip: "select", secenekKaynagi: "gruplar", zorunlu: true },
+  { name: "uyeSicilNo", label: "Üye Sicil No", tip: "text" },
+  { name: "isletme", label: "Unvan", tip: "text", zorunlu: true },
+  { name: "tabelaUnvani", label: "Tabela Unvanı", tip: "text" },
+  { name: "adSoyad", label: "Yetkili Adı Soyadı", tip: "text", zorunlu: true },
+  { name: "gorevi", label: "Yetkilinin Görevi", tip: "text" },
+  { name: "sirketTipi", label: "Şirket Tipi", tip: "text" },
+  { name: "ticaretSicilNo", label: "Ticaret Sicil No", tip: "text" },
+  { name: "grupId", label: "Meslek Grubu", tip: "select", secenekKaynagi: "gruplar", zorunlu: true },
+  { name: "uyelikDurumu", label: "Üyelik Durumu", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: UYELIK_DURUMLARI, zorunlu: true },
+  { name: "durumDegisimTarihi", label: "Durum Değişim Tarihi", tip: "date" },
+  { name: "durumDegisimNedeni", label: "Durum Değişim Nedeni", tip: "text" },
+  { name: "telefon", label: "Cep Telefonu (GSM)", tip: "tel" },
+  { name: "isTelefonu", label: "İş Telefonu", tip: "tel" },
+  { name: "vergiDairesi", label: "Vergi Dairesi", tip: "text" },
+  { name: "vergiNo", label: "Vergi Numarası", tip: "text" },
+  { name: "kurulusTarihi", label: "Kuruluş Tarihi", tip: "date" },
+  { name: "kayitTarihi", label: "Üye Kayıt Tarihi", tip: "date" },
+  { name: "naceKodu", label: "NACE Faaliyet Kodu", tip: "text" },
+  { name: "naceAdi", label: "NACE Faaliyet Adı", tip: "text" },
   { name: "gorevliId", label: "Görevli", tip: "select", secenekKaynagi: "gorevliler" },
   { name: "il", label: "İl", tip: "select", secenekKaynagi: "iller", zorunlu: true },
   { name: "ilce", label: "İlçe", tip: "select", secenekKaynagi: "ilceler", zorunlu: true },
   { name: "mahalle", label: "Mahalle", tip: "text" },
-  { name: "vergiNo", label: "Vergi Numarası", tip: "text" },
   { name: "adres", label: "Adres", tip: "textarea" },
+  { name: "faaliyetDetayi", label: "Faaliyet Detayı", tip: "textarea" },
 ];
 
 function esnafGovdesi(v: Record<string, string>) {
   return {
-    adSoyad: v.adSoyad, isletme: v.isletme, telefon: v.telefon || null,
+    adSoyad: v.adSoyad, isletme: v.isletme, telefon: v.telefon || null, isTelefonu: v.isTelefonu || null,
     grupId: v.grupId ? Number(v.grupId) : null, gorevliId: v.gorevliId ? Number(v.gorevliId) : null,
     il: v.il || null, ilce: v.ilce || null, mahalle: v.mahalle || null, adres: v.adres || null, vergiNo: v.vergiNo || null,
     durum: v.durum || null,
+    uyeSicilNo: v.uyeSicilNo || null, ticaretSicilNo: v.ticaretSicilNo || null, sirketTipi: v.sirketTipi || null,
+    tabelaUnvani: v.tabelaUnvani || null, gorevi: v.gorevi || null, vergiDairesi: v.vergiDairesi || null,
+    uyelikDurumu: v.uyelikDurumu || null,
+    durumDegisimTarihi: v.durumDegisimTarihi || null, durumDegisimNedeni: v.durumDegisimNedeni || null,
+    kurulusTarihi: v.kurulusTarihi || null, kayitTarihi: v.kayitTarihi || null,
+    naceKodu: v.naceKodu || null, naceAdi: v.naceAdi || null, faaliyetDetayi: v.faaliyetDetayi || null,
   };
 }
 
@@ -55,7 +78,7 @@ const kullaniciAlanlari: Alan[] = [
   { name: "adSoyad", label: "Ad Soyad", tip: "text", zorunlu: true },
   { name: "eposta", label: "E-posta", tip: "email" },
   { name: "telefon", label: "Telefon", tip: "tel" },
-  { name: "rol", label: "Rol", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Görevli", "Yönetici"], zorunlu: true },
+  { name: "rol", label: "Rol (Görevli = yalnızca çalışan kaydı, panele giremez)", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Görevli", "Yönetici"], zorunlu: true },
   { name: "gorev", label: "Görev", tip: "text" },
   { name: "birim", label: "Birim", tip: "text" },
 ];
@@ -74,24 +97,11 @@ export const formlar: Record<string, FormTanimi> = {
     buton: "Üye Kaydını Oluştur",
     gonder: v => api.post("/api/esnaflar", esnafGovdesi(v)),
   },
-  "Yeni Görevlendirme": {
-    alanlar: [
-      { name: "esnafId", label: "Üye", tip: "select", secenekKaynagi: "esnaflar", zorunlu: true },
-      { name: "gorevliId", label: "Görevli", tip: "select", secenekKaynagi: "gorevliler", zorunlu: true },
-      { name: "grupId", label: "Grup / Meslek Grubu", tip: "select", secenekKaynagi: "gruplar" },
-      { name: "tarih", label: "Görevlendirme Tarihi", tip: "date", zorunlu: true },
-      { name: "not", label: "Not", tip: "textarea" },
-    ],
-    buton: "Görevlendir",
-    gonder: v => api.post("/api/gorevlendirmeler", {
-      esnafId: Number(v.esnafId), gorevliId: Number(v.gorevliId),
-      grupId: v.grupId ? Number(v.grupId) : null, tarih: v.tarih, not: v.not || null, durum: "Aktif",
-    }),
-  },
   "Yeni Görüşme": {
     alanlar: [
       { name: "esnafId", label: "Üye", tip: "select", secenekKaynagi: "esnaflar", zorunlu: true },
-      { name: "gorevliId", label: "Görevli", tip: "select", secenekKaynagi: "gorevliler", zorunlu: true },
+      { name: "sira", label: "Kaçıncı Görüşme", tip: "select", secenekKaynagi: "gorusmeSirasi", zorunlu: true },
+      { name: "gorevliId", label: "Görüşen Aktif Çalışan", tip: "select", secenekKaynagi: "gorevliler", zorunlu: true },
       { name: "tarih", label: "Görüşme Tarihi", tip: "date", zorunlu: true },
       { name: "sonuc", label: "Görüşme Sonucu", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Onay Verdi", "Onay Vermedi", "Kararsız"], zorunlu: true },
       { name: "takipGerekli", label: "Takip Gerekli mi?", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Hayır", "Evet"] },
@@ -99,13 +109,14 @@ export const formlar: Record<string, FormTanimi> = {
     ],
     buton: "Görüşmeyi Kaydet",
     gonder: v => api.post("/api/gorusmeler", {
-      // Görevli rolünde görevli alanı formda yoktur; sunucu oturum sahibini atar (0 yer tutucudur).
       esnafId: Number(v.esnafId), gorevliId: v.gorevliId ? Number(v.gorevliId) : 0,
       tarih: v.tarih, sonuc: v.sonuc, not: v.not || null, takipGerekli: v.takipGerekli === "Evet",
+      sira: v.sira ? Number(v.sira) : null,
     }),
   },
   "Yeni Grup Ekle": {
     alanlar: [
+      { name: "no", label: "Meslek Grubu No", tip: "text" },
       { name: "ad", label: "Grup Adı", tip: "text", zorunlu: true },
       { name: "tur", label: "Grup Türü", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Sektörel", "Bölgesel", "Özel"], zorunlu: true },
       { name: "ustGrupId", label: "Üst Grup", tip: "select", secenekKaynagi: "gruplar" },
@@ -113,12 +124,15 @@ export const formlar: Record<string, FormTanimi> = {
     ],
     buton: "Grubu Oluştur",
     gonder: v => api.post("/api/gruplar", {
+      no: v.no ? Number(v.no) : null,
       ad: v.ad, tur: v.tur, ustGrupId: v.ustGrupId ? Number(v.ustGrupId) : null, aciklama: v.aciklama || null,
     }),
   },
-  "Yeni Kullanıcı Ekle": {
-    alanlar: [...kullaniciAlanlari, { name: "sifre", label: "Geçici Şifre (en az 10 karakter; büyük/küçük harf ve rakam)", tip: "password", zorunlu: true }],
-    buton: "Kullanıcıyı Oluştur",
+  "Yeni Çalışan Ekle": {
+    // Şifre yalnızca panele girecek Yönetici hesapları için gereklidir; çalışan kaydı şifresiz açılır
+    // ve giriş yapamaz, yalnızca görüşmelerde seçilir.
+    alanlar: [...kullaniciAlanlari, { name: "sifre", label: "Geçici Şifre (yalnızca Yönetici için; en az 10 karakter, büyük/küçük harf ve rakam)", tip: "password" }],
+    buton: "Çalışanı Kaydet",
     // Kullanıcı adını sunucu Ad Soyad'dan türetebildiği için oluşan kaydı geri okuyup
     // giriş bilgilerini yöneticiye gösteriyoruz; şifre bir daha hiçbir yerden okunamaz.
     gonder: async v => {
@@ -136,6 +150,7 @@ export const duzenlemeFormlari: Record<string, DuzenlemeTanimi> = {
   },
   grup: {
     alanlar: [
+      { name: "no", label: "Meslek Grubu No", tip: "text" },
       { name: "ad", label: "Grup Adı", tip: "text", zorunlu: true },
       { name: "tur", label: "Grup Türü", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Sektörel", "Bölgesel", "Özel"], zorunlu: true },
       { name: "ustGrupId", label: "Üst Grup", tip: "select", secenekKaynagi: "gruplar" },
@@ -144,6 +159,7 @@ export const duzenlemeFormlari: Record<string, DuzenlemeTanimi> = {
     ],
     buton: "Değişiklikleri Kaydet",
     gonder: (id, v) => api.put(`/api/gruplar/${id}`, {
+      no: v.no ? Number(v.no) : null,
       ad: v.ad, tur: v.tur, ustGrupId: v.ustGrupId ? Number(v.ustGrupId) : null,
       aciklama: v.aciklama || null, durum: v.durum,
     }),
@@ -159,7 +175,8 @@ export const duzenlemeFormlari: Record<string, DuzenlemeTanimi> = {
   },
   gorusme: {
     alanlar: [
-      { name: "gorevliId", label: "Görevli", tip: "select", secenekKaynagi: "gorevliler", zorunlu: true },
+      { name: "sira", label: "Kaçıncı Görüşme", tip: "select", secenekKaynagi: "gorusmeSirasi", zorunlu: true },
+      { name: "gorevliId", label: "Görüşen Aktif Çalışan", tip: "select", secenekKaynagi: "gorevliler", zorunlu: true },
       { name: "tarih", label: "Görüşme Tarihi", tip: "date", zorunlu: true },
       { name: "sonuc", label: "Görüşme Sonucu", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Onay Verdi", "Onay Vermedi", "Kararsız"], zorunlu: true },
       { name: "takipGerekli", label: "Takip Gerekli mi?", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Hayır", "Evet"], zorunlu: true },
@@ -170,30 +187,18 @@ export const duzenlemeFormlari: Record<string, DuzenlemeTanimi> = {
     gonder: (id, v) => api.put(`/api/gorusmeler/${id}`, {
       esnafId: Number(v.esnafId), gorevliId: v.gorevliId ? Number(v.gorevliId) : 0,
       tarih: v.tarih, sonuc: v.sonuc, not: v.not || null, takipGerekli: v.takipGerekli === "Evet",
-    }),
-  },
-  gorevlendirme: {
-    alanlar: [
-      { name: "esnafId", label: "Üye", tip: "select", secenekKaynagi: "esnaflar", zorunlu: true },
-      { name: "gorevliId", label: "Görevli", tip: "select", secenekKaynagi: "gorevliler", zorunlu: true },
-      { name: "grupId", label: "Grup / Meslek Grubu", tip: "select", secenekKaynagi: "gruplar" },
-      { name: "tarih", label: "Tarih", tip: "date", zorunlu: true },
-      { name: "durum", label: "Durum", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Aktif", "Tamamlandı", "İptal Edildi"], zorunlu: true },
-      { name: "not", label: "Not", tip: "textarea" },
-    ],
-    buton: "Değişiklikleri Kaydet",
-    gonder: (id, v) => api.put(`/api/gorevlendirmeler/${id}`, {
-      esnafId: v.esnafId ? Number(v.esnafId) : null, gorevliId: Number(v.gorevliId),
-      grupId: v.grupId ? Number(v.grupId) : null, tarih: v.tarih, not: v.not || null, durum: v.durum,
+      sira: v.sira ? Number(v.sira) : null,
     }),
   },
 };
 
 export interface DuzenlemeIstegi { form: keyof typeof duzenlemeFormlari; id: number; degerler: Record<string, string>; baslik: string }
 
-export function ActionModal({ action, duzenleme, open, onClose, onSuccess, onSaved }: {
+export function ActionModal({ action, duzenleme, open, onClose, onSuccess, onSaved, onDoldurma }: {
   action: string; duzenleme?: DuzenlemeIstegi | null; open: boolean; onClose: () => void;
   onSuccess: (message: string) => void; onSaved?: () => void;
+  /** Yeni kayıt formuna önden doldurulacak değerler (ör. üye ekranından açılan görüşme). */
+  onDoldurma?: Record<string, string>;
 }) {
   const [busy, setBusy] = useState(false);
   const [hata, setHata] = useState("");
@@ -203,10 +208,13 @@ export function ActionModal({ action, duzenleme, open, onClose, onSuccess, onSav
   const [kopyalandi, setKopyalandi] = useState(false);
   // İlçe listesi seçili ile bağlıdır; il değişince ilçe seçimi sıfırlanır.
   const [secilenIl, setSecilenIl] = useState("");
+  // Görüşme sırası seçilen üyenin mevcut görüşme sayısına bağlıdır; üye seçilince yeniden hesaplanır.
+  const [secilenEsnafId, setSecilenEsnafId] = useState("");
+  const [gorusmeSayisi, setGorusmeSayisi] = useState<number | null>(null);
 
   const form: FormTanimi | DuzenlemeTanimi | undefined = duzenleme ? duzenlemeFormlari[duzenleme.form] : formlar[action];
   const baslik = duzenleme ? duzenleme.baslik : action;
-  const degerler = duzenleme?.degerler ?? {};
+  const degerler = duzenleme?.degerler ?? onDoldurma ?? {};
 
   useEffect(() => {
     if (!open || !form) return;
@@ -215,21 +223,52 @@ export function ActionModal({ action, duzenleme, open, onClose, onSuccess, onSav
     setKopyalandi(false);
     // Düzenlemede kayıtlı il ile açılır; yeni kayıtta boş başlar.
     setSecilenIl(duzenleme?.degerler.il ?? "");
+    setSecilenEsnafId(duzenleme?.degerler.esnafId ?? onDoldurma?.esnafId ?? "");
+    setGorusmeSayisi(null);
     const kaynaklar = new Set(form.alanlar.map(a => a.secenekKaynagi).filter(Boolean));
     if (kaynaklar.has("gruplar")) api.get<GrupKaydi[]>("/api/gruplar").then(setGruplar).catch(() => setGruplar([]));
     if (kaynaklar.has("gorevliler")) api.get<KullaniciKaydi[]>("/api/kullanicilar?durum=Aktif").then(setGorevliler).catch(() => setGorevliler([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, action, duzenleme?.form, duzenleme?.id]);
 
+  // Görüşme sırası seçenekleri üyenin mevcut görüşme sayısına bağlı; liste ucunun
+  // "toplam" değeri sayıyı zaten veriyor, ayrı bir uç gerekmiyor.
+  useEffect(() => {
+    if (!open || !secilenEsnafId) { setGorusmeSayisi(null); return; }
+    let aktif = true;
+    api.get<{ toplam: number }>(`/api/gorusmeler?esnafId=${secilenEsnafId}&sayfaBoyutu=1`)
+      .then(v => { if (aktif) setGorusmeSayisi(v.toplam); })
+      .catch(() => { if (aktif) setGorusmeSayisi(null); });
+    return () => { aktif = false; };
+  }, [open, secilenEsnafId]);
+
   if (!form) return null;
+
+  // Yeni kayıtta sıradaki numara (mevcut + 1), düzenlemede kaydın kendi numarası varsayılan gelir.
+  const siraUstSinir = gorusmeSayisi === null ? null : gorusmeSayisi + (duzenleme ? 0 : 1);
+  const varsayilanSira = duzenleme ? degerler.sira : (siraUstSinir === null ? "" : String(siraUstSinir));
 
   function secenekler(alan: Alan): { deger: string; etiket: string }[] {
     switch (alan.secenekKaynagi) {
-      case "gruplar": return gruplar.map(g => ({ deger: String(g.id), etiket: g.ad }));
+      case "gruplar": return gruplar.map(g => ({ deger: String(g.id), etiket: g.no ? `${g.no}. ${g.ad}` : g.ad }));
       case "gorevliler": return gorevliler.map(k => ({ deger: String(k.id), etiket: k.adSoyad }));
       case "iller": return ILLER.map(i => ({ deger: i, etiket: i }));
       case "ilceler": return ilceleriGetir(secilenIl).map(i => ({ deger: i, etiket: i }));
-      default: return (alan.sabitSecenekler ?? []).map(s => ({ deger: s, etiket: s }));
+      case "gorusmeSirasi": {
+        // Numara atlanamaz: en fazla "mevcut görüşme sayısı + 1" seçilebilir.
+        const ust = siraUstSinir ?? (duzenleme ? Number(degerler.sira || 1) : 1);
+        return Array.from({ length: Math.max(1, ust) }, (_, i) => ({
+          deger: String(i + 1), etiket: `${i + 1}. Görüşme`,
+        }));
+      }
+      default: {
+        const sabit = alan.sabitSecenekler ?? [];
+        // Kaydın mevcut değeri sabit listede yoksa (ör. karar bekleyen görevlendirme) seçili kalabilmesi
+        // için listeye eklenir; aksi halde zorunlu alan boş açılır ve form gönderilemez.
+        const mevcut = degerler[alan.name];
+        const liste = mevcut && !sabit.includes(mevcut) ? [mevcut, ...sabit] : sabit;
+        return liste.map(s => ({ deger: s, etiket: s }));
+      }
     }
   }
 
@@ -298,11 +337,9 @@ export function ActionModal({ action, duzenleme, open, onClose, onSuccess, onSav
     </div>
   </Modal>;
 
-  // Görevli rolü görüşmeyi yalnızca kendi adına kaydeder: görevli seçimi gizlenir (sunucu kendisini atar),
-  // esnaf seçici de yalnızca kabul ettiği görevlendirmelerdeki esnafları listeler.
-  const gorusmeFormu = action === "Yeni Görüşme" || duzenleme?.form === "gorusme";
-  const kisitli = gorusmeFormu && !yoneticiMi();
-  const gosterilecekAlanlar = kisitli ? form.alanlar.filter(a => a.name !== "gorevliId") : form.alanlar;
+  // Panele yalnızca yönetici girdiği için görüşmeyi kimin yaptığı her zaman elle seçilir.
+  const kisitli = false;
+  const gosterilecekAlanlar = form.alanlar;
 
   return <Modal open={open} title={baslik} onClose={onClose}>
     <form className="action-form" onSubmit={submit} autoComplete="off" key={duzenleme ? `d-${duzenleme.form}-${duzenleme.id}` : action}>
@@ -312,7 +349,8 @@ export function ActionModal({ action, duzenleme, open, onClose, onSuccess, onSav
           : <FormField key={alan.name} label={alan.label} genis={alan.secenekKaynagi === "esnaflar"}>
             {alan.secenekKaynagi === "esnaflar"
               ? <EsnafSecici name={alan.name} required={alan.zorunlu} sadeceGorevlendirilmis={kisitli}
-                  defaultId={degerler[alan.name] || undefined} defaultEtiket={degerler[`${alan.name}Etiket`] || undefined} />
+                  defaultId={degerler[alan.name] || undefined} defaultEtiket={degerler[`${alan.name}Etiket`] || undefined}
+                  onSecim={setSecilenEsnafId} />
               : alan.tip === "textarea" ? <textarea name={alan.name} required={alan.zorunlu} maxLength={500} placeholder={`${alan.label} giriniz`} defaultValue={degerler[alan.name] ?? ""} />
               : alan.secenekKaynagi === "ilceler"
                 // İlçe listesi seçili ile bağlı: il değişince key değişir, seçim sıfırdan başlar.
@@ -320,6 +358,17 @@ export function ActionModal({ action, duzenleme, open, onClose, onSuccess, onSav
                     defaultValue={secilenIl && secilenIl === degerler.il ? degerler[alan.name] ?? "" : ""}>
                     <option value="" disabled={alan.zorunlu}>{secilenIl ? "Seçiniz" : "Önce il seçiniz"}</option>
                     {secenekler(alan).map(s => <option key={s.deger} value={s.deger}>{s.etiket}</option>)}
+                  </select>
+              : alan.secenekKaynagi === "gorusmeSirasi"
+                // Üye değişince liste ve varsayılan yeniden kurulur (key ile yeniden oluşturulur).
+                ? <select key={`sira-${secilenEsnafId}-${gorusmeSayisi}`} name={alan.name} required={alan.zorunlu}
+                    disabled={!secilenEsnafId || (!duzenleme && gorusmeSayisi === null)}
+                    defaultValue={varsayilanSira ?? ""}>
+                    {!secilenEsnafId
+                      ? <option value="">Önce üye seçiniz</option>
+                      : gorusmeSayisi === null && !duzenleme
+                        ? <option value="">Hesaplanıyor...</option>
+                        : secenekler(alan).map(s => <option key={s.deger} value={s.deger}>{s.etiket}</option>)}
                   </select>
               : alan.tip === "select" ? <select name={alan.name} required={alan.zorunlu} defaultValue={degerler[alan.name] ?? ""}
                   onChange={alan.secenekKaynagi === "iller" ? e => setSecilenIl(e.target.value) : undefined}>

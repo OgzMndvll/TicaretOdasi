@@ -25,6 +25,10 @@ export function DonutChart({ segments }: { segments: DonutSegment[] }) {
 
 export function LineChart({ data }: { data: { ay: string; adet: number }[] }) {
   const genislik = 600, yukseklik = 240, solPay = 20, altPay = 20, ustPay = 20;
+  // Günlük seride 30-90 nokta olabiliyor; nokta ve etiketler seyreltilmezse okunmaz hale gelir.
+  const yogun = data.length > 14;
+  const noktaYaricap = data.length > 45 ? 0 : yogun ? 3 : 6;
+  const etiketAdimi = Math.max(1, Math.ceil(data.length / 12));
   const enBuyuk = Math.max(1, ...data.map(d => d.adet));
   const noktalar = data.map((d, i) => {
     const x = data.length > 1 ? solPay + (i * (genislik - solPay * 2)) / (data.length - 1) : genislik / 2;
@@ -37,13 +41,14 @@ export function LineChart({ data }: { data: { ay: string; adet: number }[] }) {
     : "";
   return <div className="line-chart">
     <div className="chart-grid" />
-    <svg viewBox={`0 0 ${genislik} ${yukseklik}`} preserveAspectRatio="none" aria-label="Aylık görüşme istatistikleri">
+    <svg viewBox={`0 0 ${genislik} ${yukseklik}`} preserveAspectRatio="none" aria-label="Günlük görüşme istatistikleri">
       <defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#1671ee" stopOpacity=".24" /><stop offset="1" stopColor="#1671ee" stopOpacity="0" /></linearGradient></defs>
       {alan && <path d={alan} fill="url(#area)" />}
       {noktalar.length > 1 && <polyline points={cizgi} fill="none" stroke="#1269e8" strokeWidth="4" />}
-      <g fill="#1269e8">{noktalar.map(([x, y], i) => <circle key={`${data[i].ay}-${i}`} cx={x} cy={y} r="6"><title>{`${data[i].ay}: ${data[i].adet}`}</title></circle>)}</g>
+      <g fill="#1269e8">{noktalar.map(([x, y], i) => <circle key={`${data[i].ay}-${i}`} cx={x} cy={y} r={noktaYaricap}><title>{`${data[i].ay}: ${data[i].adet}`}</title></circle>)}</g>
     </svg>
-    <div className="chart-labels">{data.map((d, i) => <span key={`${d.ay}-${i}`}>{d.ay}</span>)}</div>
+    <div className="chart-labels">{data.map((d, i) =>
+      <span key={`${d.ay}-${i}`}>{i % etiketAdimi === 0 || i === data.length - 1 ? d.ay : ""}</span>)}</div>
   </div>;
 }
 

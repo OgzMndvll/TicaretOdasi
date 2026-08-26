@@ -4,6 +4,7 @@ using EtsoApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace EtsoApi.Migrations
 {
     [DbContext(typeof(EtsoDbContext))]
-    partial class EtsoDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260825131259_UyeRaporAlanlari")]
+    partial class UyeRaporAlanlari
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -285,9 +288,6 @@ namespace EtsoApi.Migrations
                     b.Property<string>("Not")
                         .HasMaxLength(1000)
                         .HasColumnType("varchar(1000)");
-
-                    b.Property<int>("Sira")
-                        .HasColumnType("int");
 
                     b.Property<string>("Sonuc")
                         .IsRequired()

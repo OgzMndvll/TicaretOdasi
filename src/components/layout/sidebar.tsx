@@ -5,14 +5,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut, X } from "lucide-react";
 import { navigation } from "@/lib/navigation";
-import { cikisYap, yoneticiMi } from "@/lib/auth";
-
-// Görevli rolünün erişebildiği sayfalar; gerisi menüde görünmez.
-const GOREVLI_SAYFALARI = ["/gorevlendirmeler", "/gorusmeler", "/ayarlar"];
+import { cikisYap } from "@/lib/auth";
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
-  const menu = yoneticiMi() ? navigation : navigation.filter(n => GOREVLI_SAYFALARI.includes(n.href));
+  // Panele yalnızca yönetici girdiği için menünün tamamı görünür.
+  const menu = navigation;
   return (
     <>
       <button className={`sidebar-scrim ${open ? "show" : ""}`} onClick={onClose} aria-label="Menüyü kapat" />

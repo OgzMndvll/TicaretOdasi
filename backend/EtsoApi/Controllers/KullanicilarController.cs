@@ -57,18 +57,23 @@ public class KullanicilarController(EtsoDbContext db) : ControllerBase
         if (await db.Kullanicilar.AnyAsync(k => k.KullaniciAdi == kullaniciAdi))
             return Conflict(new { mesaj = "Bu kullanıcı adı zaten kullanımda." });
 
-        if (string.IsNullOrWhiteSpace(dto.Sifre))
-            return BadRequest(new { mesaj = "Geçici şifre zorunludur." });
-        var politikaHatasi = AuthController.SifrePolitikasiHatasi(dto.Sifre);
-        if (politikaHatasi is not null) return BadRequest(new { mesaj = politikaHatasi });
-
         // Rol ve durum yalnızca bilinen değerlerden olabilir; serbest metin kabul edilmez.
-        var rol = string.IsNullOrWhiteSpace(dto.Rol) ? "Görevli" : dto.Rol;
+        var rol = string.IsNullOrWhiteSpace(dto.Rol) ? Kullanici.CalisanRolu : dto.Rol;
         if (!GecerliRoller.Contains(rol))
             return BadRequest(new { mesaj = "Geçersiz rol. 'Yönetici' veya 'Görevli' olmalıdır." });
         var durum = string.IsNullOrWhiteSpace(dto.Durum) ? "Aktif" : dto.Durum;
         if (!GecerliDurumlar.Contains(durum))
             return BadRequest(new { mesaj = "Geçersiz durum. 'Aktif' veya 'Pasif' olmalıdır." });
+
+        // Panele yalnızca yönetici girer; şifre de yalnızca yönetici hesabı için anlamlıdır.
+        // Çalışan kaydı görüşmelerde seçilmek içindir, şifresiz açılır ve giriş yapamaz.
+        if (rol == Kullanici.YoneticiRolu)
+        {
+            if (string.IsNullOrWhiteSpace(dto.Sifre))
+                return BadRequest(new { mesaj = "Yönetici hesabı için geçici şifre zorunludur." });
+            var politikaHatasi = AuthController.SifrePolitikasiHatasi(dto.Sifre);
+            if (politikaHatasi is not null) return BadRequest(new { mesaj = politikaHatasi });
+        }
 
         var kullanici = new Kullanici
         {
@@ -81,7 +86,12 @@ public class KullanicilarController(EtsoDbContext db) : ControllerBase
             Telefon = dto.Telefon,
             Durum = durum,
         };
-        kullanici.SifreHash = AuthController.Hashle(kullanici, dto.Sifre);
+        // Şifresiz çalışan kaydında da hash rastgele üretilir: alan boş kalırsa açılışta
+        // "şifresiz kullanıcı" olarak görülüp yeniden şifre atanmaya çalışılırdı.
+        kullanici.SifreHash = AuthController.Hashle(kullanici,
+            string.IsNullOrWhiteSpace(dto.Sifre)
+                ? Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
+                : dto.Sifre);
         db.Kullanicilar.Add(kullanici);
         await db.SaveChangesAsync();
         return CreatedAtAction(nameof(Getir), new { id = kullanici.Id }, new { kullanici.Id, kullanici.KullaniciAdi });
@@ -126,8 +136,16 @@ public class KullanicilarController(EtsoDbContext db) : ControllerBase
         if (yoneticilikBitiyor && !await BaskaAktifYoneticiVarMi(id))
             return Conflict(new { mesaj = "Sistemdeki son aktif yönetici bu kullanıcı; rolünü veya durumunu değiştiremezsiniz. Önce başka bir yönetici tanımlayın." });
 
+        // Kullanıcı adı tekil indekslidir; çakışma denetlenmezse istek 500 ile düşerdi.
+        var yeniKullaniciAdi = string.IsNullOrWhiteSpace(dto.KullaniciAdi)
+            ? kullanici.KullaniciAdi
+            : dto.KullaniciAdi.Trim().ToLowerInvariant();
+        if (yeniKullaniciAdi != kullanici.KullaniciAdi
+            && await db.Kullanicilar.AnyAsync(k => k.KullaniciAdi == yeniKullaniciAdi && k.Id != id))
+            return Conflict(new { mesaj = "Bu kullanıcı adı zaten kullanımda." });
+
         kullanici.AdSoyad = dto.AdSoyad.Trim();
-        if (!string.IsNullOrWhiteSpace(dto.KullaniciAdi)) kullanici.KullaniciAdi = dto.KullaniciAdi.Trim().ToLowerInvariant();
+        kullanici.KullaniciAdi = yeniKullaniciAdi;
         if (!string.IsNullOrWhiteSpace(dto.Rol)) kullanici.Rol = dto.Rol;
         kullanici.Gorev = dto.Gorev;
         kullanici.Birim = dto.Birim;
@@ -198,6 +216,11 @@ public class KullanicilarController(EtsoDbContext db) : ControllerBase
         {
             await using var akis = dosya.OpenReadStream();
             satirlar = ExcelServisi.Oku(akis);
+        }
+        catch (InvalidOperationException e)
+        {
+            // Satır tavanı gibi anlaşılır sınır hataları kullanıcıya olduğu gibi iletilir.
+            return BadRequest(new { mesaj = e.Message });
         }
         catch
         {

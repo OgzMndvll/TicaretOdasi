@@ -9,50 +9,78 @@ namespace EtsoApi.Controllers;
 [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Yönetici")]
 public class DashboardController(EtsoDbContext db) : ControllerBase
 {
+    private const int VarsayilanGunSayisi = 30;
+    private const int EnFazlaGunSayisi = 366;
+
+    /// <summary>
+    /// Panel özeti. Meslek grubu ve tarih aralığı süzgeçleri kartlara, grafiklere ve son görüşmeler
+    /// listesine birlikte uygulanır; aksi halde kartlarla grafik birbiriyle çelişirdi.
+    /// </summary>
     [HttpGet]
-    public async Task<IActionResult> Ozet()
+    public async Task<IActionResult> Ozet(
+        [FromQuery] int? grupId, [FromQuery] DateTime? baslangic, [FromQuery] DateTime? bitis)
     {
-        var durumlar = await db.Esnaflar.GroupBy(e => e.Durum)
+        // Tarih aralığı: verilmezse son 30 gün. Aralık, sunucuyu koruyacak şekilde sınırlandırılır.
+        var bugun = DateTime.UtcNow.Date;
+        var bitisGunu = (bitis?.Date ?? bugun).AddDays(1);
+        var baslangicGunu = baslangic?.Date ?? bitisGunu.AddDays(-VarsayilanGunSayisi);
+        if (baslangicGunu >= bitisGunu) baslangicGunu = bitisGunu.AddDays(-1);
+        if ((bitisGunu - baslangicGunu).TotalDays > EnFazlaGunSayisi)
+            baslangicGunu = bitisGunu.AddDays(-EnFazlaGunSayisi);
+
+        var uyeler = db.Esnaflar.AsNoTracking();
+        var gorusmeler = db.Gorusmeler.AsNoTracking();
+        if (grupId is not null)
+        {
+            uyeler = uyeler.Where(e => e.GrupId == grupId);
+            gorusmeler = gorusmeler.Where(g => g.Esnaf!.GrupId == grupId);
+        }
+
+        // Üye kartları üyenin güncel onay durumunu gösterir; tarih aralığından etkilenmez.
+        var durumlar = await uyeler.GroupBy(e => e.Durum)
             .Select(g => new { Durum = g.Key, Adet = g.Count() }).ToListAsync();
         int Say(string durum) => durumlar.FirstOrDefault(g => g.Durum == durum)?.Adet ?? 0;
 
         var toplamEsnaf = durumlar.Sum(g => g.Adet);
         var gorusulmemis = Say("Görüşülmedi");
 
-        var bugun = DateTime.UtcNow.Date;
-        var seriBaslangic = new DateTime(bugun.Year, bugun.Month, 1).AddMonths(-7);
-        var aylikHam = await db.Gorusmeler
-            .Where(g => g.Tarih >= seriBaslangic)
-            .GroupBy(g => new { g.Tarih.Year, g.Tarih.Month })
-            .Select(g => new { g.Key.Year, g.Key.Month, Adet = g.Count() })
+        var aralik = gorusmeler.Where(g => g.Tarih >= baslangicGunu && g.Tarih < bitisGunu);
+
+        var gunlukHam = await aralik
+            .GroupBy(g => g.Tarih.Date)
+            .Select(g => new { Gun = g.Key, Adet = g.Count() })
             .ToListAsync();
 
-        string[] aylar = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
-        var aylikGorusmeler = Enumerable.Range(0, 8)
-            .Select(i => seriBaslangic.AddMonths(i))
-            .Select(ay => new
+        // Kayıt olmayan günler de seriye 0 olarak girer; aksi halde grafikte boşluklar oluşur.
+        var gunSayisi = (int)(bitisGunu - baslangicGunu).TotalDays;
+        var gunlukGorusmeler = Enumerable.Range(0, gunSayisi)
+            .Select(i => baslangicGunu.AddDays(i))
+            .Select(gun => new
             {
-                ay = aylar[ay.Month - 1],
-                adet = aylikHam.FirstOrDefault(h => h.Year == ay.Year && h.Month == ay.Month)?.Adet ?? 0,
+                tarih = gun.ToString("yyyy-MM-dd"),
+                ay = gun.ToString("dd.MM"),
+                adet = gunlukHam.FirstOrDefault(h => h.Gun == gun)?.Adet ?? 0,
             })
             .ToList();
 
-        var gorevliPerformans = await db.Gorusmeler
+        var gorevliPerformans = await aralik
             .GroupBy(g => g.Gorevli!.AdSoyad)
             .Select(g => new { adSoyad = g.Key, adet = g.Count() })
             .OrderByDescending(g => g.adet)
             .Take(5)
             .ToListAsync();
 
-        var sonGorusmeler = await db.Gorusmeler.AsNoTracking()
+        var sonGorusmeler = await aralik
             .OrderByDescending(g => g.Tarih)
-            .Take(5)
+            .Take(8)
             .Select(g => new
             {
-                g.Id, g.Tarih, g.Sonuc,
+                g.Id, g.Tarih, g.Sonuc, g.Sira,
                 Esnaf = g.Esnaf!.AdSoyad,
                 Isletme = g.Esnaf.Isletme,
                 Grup = g.Esnaf.Grup != null ? g.Esnaf.Grup.Ad : null,
+                GrupNo = g.Esnaf.Grup != null ? g.Esnaf.Grup.No : null,
+                EsnafDurum = g.Esnaf.Durum,
                 Gorevli = g.Gorevli!.AdSoyad,
             })
             .ToListAsync();
@@ -65,7 +93,10 @@ public class DashboardController(EtsoDbContext db) : ControllerBase
             onayVermeyen = Say("Onay Vermedi"),
             kararsiz = Say("Kararsız"),
             gorusulmemis,
-            aylikGorusmeler,
+            aralikGorusme = gunlukHam.Sum(g => g.Adet),
+            baslangic = baslangicGunu.ToString("yyyy-MM-dd"),
+            bitis = bitisGunu.AddDays(-1).ToString("yyyy-MM-dd"),
+            gunlukGorusmeler,
             gorevliPerformans,
             sonGorusmeler,
         });

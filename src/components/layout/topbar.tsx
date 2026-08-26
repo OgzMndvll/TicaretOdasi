@@ -2,28 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, CalendarDays, ChevronDown, LogOut, Menu, Settings } from "lucide-react";
-import { api } from "@/lib/api";
-import { cikisYap, kimlik, yoneticiMi } from "@/lib/auth";
+import { CalendarDays, ChevronDown, LogOut, Menu, Settings } from "lucide-react";
+import { cikisYap, kimlik } from "@/lib/auth";
 
 export function Topbar({ onMenu }: { onMenu: () => void }) {
   const router = useRouter();
-  const [bekleyenOnay, setBekleyenOnay] = useState(0);
   const [profilAcik, setProfilAcik] = useState(false);
   const profilRef = useRef<HTMLDivElement>(null);
   const ben = kimlik();
-
-  useEffect(() => {
-    // Onaylar yalnızca Yönetici'ye açık; görevli için bildirim sorgusu yapılmaz.
-    if (!yoneticiMi()) return;
-    let aktif = true;
-    const getir = () => api.get<{ bekleyen: number }>("/api/onaylar/istatistik")
-      .then(v => { if (aktif) setBekleyenOnay(v.bekleyen); })
-      .catch(() => {});
-    getir();
-    const zamanlayici = setInterval(getir, 60_000);
-    return () => { aktif = false; clearInterval(zamanlayici); };
-  }, []);
 
   useEffect(() => {
     if (!profilAcik) return;
@@ -49,11 +35,6 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
       <button className="icon-button menu-button" onClick={onMenu} aria-label="Menüyü aç"><Menu size={24} /></button>
       <div className="topbar-actions">
         <button className="date-pill" title="Bugünün tarihi"><CalendarDays size={17} /><span>{bugun}</span></button>
-        {yoneticiMi() && <button className="notification" aria-label={`Bekleyen onaylar: ${bekleyenOnay}`}
-          title={bekleyenOnay > 0 ? `${bekleyenOnay} bekleyen onay` : "Bekleyen onay yok"}
-          onClick={() => router.push("/onaylar")}>
-          <Bell size={20} />{bekleyenOnay > 0 && <b>{bekleyenOnay > 99 ? "99+" : bekleyenOnay}</b>}
-        </button>}
         <div className="profile-menu-wrap" ref={profilRef}>
           <button className={`profile ${profilAcik ? "open" : ""}`} type="button"
             aria-haspopup="menu" aria-expanded={profilAcik} aria-controls="profile-menu"

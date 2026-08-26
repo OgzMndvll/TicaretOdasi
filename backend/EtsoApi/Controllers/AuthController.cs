@@ -82,6 +82,15 @@ public class AuthController(EtsoDbContext db, TokenServisi tokenServisi, ILogger
         if (kullanici.Durum != "Aktif")
             return Unauthorized(new { mesaj = "Hesabınız pasif durumda. Yöneticinizle iletişime geçin." });
 
+        // Panele yalnızca yönetici girer. Çalışan kayıtları görüşmelerde seçilmek içindir; şifresi
+        // doğru olsa bile oturum açamazlar. Kontrol şifre doğrulandıktan sonra yapılır ki
+        // hangi hesabın yönetici olduğu deneme yanılmayla anlaşılmasın.
+        if (kullanici.Rol != Kullanici.YoneticiRolu)
+        {
+            log.LogWarning("Yönetici olmayan hesapla giriş denemesi: {KullaniciAdi}", kullanici.KullaniciAdi);
+            return Unauthorized(new { mesaj = "Panele yalnızca yönetici hesapları giriş yapabilir." });
+        }
+
         kullanici.BasarisizGiris = 0;
         kullanici.KilitBitis = null;
         if (sonuc == PasswordVerificationResult.SuccessRehashNeeded)

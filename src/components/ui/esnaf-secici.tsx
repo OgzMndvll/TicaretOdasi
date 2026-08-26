@@ -8,10 +8,12 @@ import { api, EsnafKaydi, GrupKaydi, Sayfali } from "@/lib/api";
  * Binlerce esnaf arasından hızlı seçim: yazarak arama + grup filtresi, sonuçlar A-Z.
  * Form gönderiminde seçilen esnafın kimliği `name` alanıyla iletilir.
  */
-export function EsnafSecici({ name, required, defaultId, defaultEtiket, sadeceGorevlendirilmis = false }: {
+export function EsnafSecici({ name, required, defaultId, defaultEtiket, sadeceGorevlendirilmis = false, onSecim }: {
   name: string; required?: boolean; defaultId?: string; defaultEtiket?: string;
   /** true: yalnızca oturumdaki görevlinin kabul ettiği görevlendirmelerdeki esnaflar listelenir. */
   sadeceGorevlendirilmis?: boolean;
+  /** Seçim değiştiğinde üst forma bildirilir (ör. görüşme sırasını hesaplamak için). */
+  onSecim?: (esnafId: string) => void;
 }) {
   const [acik, setAcik] = useState(false);
   const [arama, setArama] = useState("");
@@ -61,7 +63,7 @@ export function EsnafSecici({ name, required, defaultId, defaultEtiket, sadeceGo
     <button type="button" className={`esnaf-secici-kutu ${acik ? "acik" : ""}`} onClick={() => setAcik(a => !a)}>
       <span className={secili ? "" : "bos"}>{secili?.etiket ?? "Üye seçin — yazarak arayabilirsiniz"}</span>
       {secili
-        ? <i role="button" aria-label="Seçimi temizle" onClick={e => { e.stopPropagation(); setSecili(null); }}><X size={15} /></i>
+        ? <i role="button" aria-label="Seçimi temizle" onClick={e => { e.stopPropagation(); setSecili(null); onSecim?.(""); }}><X size={15} /></i>
         : <ChevronDown size={15} />}
     </button>
     {/* required doğrulaması: görünmez ama form doğrulamasına katılan alan */}
@@ -82,7 +84,7 @@ export function EsnafSecici({ name, required, defaultId, defaultEtiket, sadeceGo
         {yukleniyor && <li className="bilgi">Aranıyor...</li>}
         {!yukleniyor && sonuclar.length === 0 && <li className="bilgi">Sonuç bulunamadı.</li>}
         {!yukleniyor && sonuclar.map(e => <li key={e.id}>
-          <button type="button" onClick={() => { setSecili({ id: String(e.id), etiket: `${e.adSoyad} — ${e.isletme}` }); setAcik(false); }}>
+          <button type="button" onClick={() => { setSecili({ id: String(e.id), etiket: `${e.adSoyad} — ${e.isletme}` }); setAcik(false); onSecim?.(String(e.id)); }}>
             <b>{e.adSoyad}</b>
             <small>{e.isletme}{e.grup ? ` · ${e.grup}` : ""}{e.ilce ? ` · ${e.ilce}` : ""}</small>
           </button>

@@ -1,15 +1,19 @@
 "use client";
 
 import { Plus, RotateCcw, Search } from "lucide-react";
+import { CokluSecim } from "./coklu-secim";
 
 export interface FiltreSecim {
   label: string;
   options: { deger: string; etiket: string }[];
+  /** Tek seçimde değerin kendisi, çoklu seçimde virgülle ayrılmış değerler. */
   value: string;
   onChange: (deger: string) => void;
+  /** true: aynı süzgeçte birden çok değer seçilebilir. */
+  coklu?: boolean;
 }
 
-export function FilterBar({ action, onAction, filters = [], searchValue, onSearch, onReset, extra }: {
+export function FilterBar({ action, onAction, filters = [], searchValue, onSearch, onReset, extra, ekAlanlar }: {
   action?: string;
   onAction?: () => void;
   filters?: FiltreSecim[];
@@ -17,6 +21,8 @@ export function FilterBar({ action, onAction, filters = [], searchValue, onSearc
   onSearch?: (deger: string) => void;
   onReset?: () => void;
   extra?: React.ReactNode;
+  /** Açılır listelerin yanına giren serbest alanlar (ör. tarih aralığı girdileri). */
+  ekAlanlar?: React.ReactNode;
 }) {
   return <section className="filter-card">
     {onSearch && <label className="filter-search"><span>Arama</span><div>
@@ -24,12 +30,17 @@ export function FilterBar({ action, onAction, filters = [], searchValue, onSearc
         value={searchValue ?? ""} onChange={e => onSearch(e.target.value)} />
       <Search size={18} />
     </div></label>}
-    {filters.map(filtre => <label key={filtre.label} className="filter-select"><span>{filtre.label}</span>
-      <select aria-label={filtre.label} value={filtre.value} onChange={e => filtre.onChange(e.target.value)}>
-        <option value="">Tümü</option>
-        {filtre.options.map(o => <option key={o.deger} value={o.deger}>{o.etiket}</option>)}
-      </select>
-    </label>)}
+    {filters.map(filtre => filtre.coklu
+      ? <div key={filtre.label} className="filter-select"><span>{filtre.label}</span>
+          <CokluSecim label={filtre.label} options={filtre.options} value={filtre.value} onChange={filtre.onChange} />
+        </div>
+      : <label key={filtre.label} className="filter-select"><span>{filtre.label}</span>
+          <select aria-label={filtre.label} value={filtre.value} onChange={e => filtre.onChange(e.target.value)}>
+            <option value="">Tümü</option>
+            {filtre.options.map(o => <option key={o.deger} value={o.deger}>{o.etiket}</option>)}
+          </select>
+        </label>)}
+    {ekAlanlar}
     <div className="filter-actions">
       {action && <button className="dark-button" onClick={onAction}><Plus size={18} />{action}</button>}
       {extra}

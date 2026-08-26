@@ -44,6 +44,12 @@ public static class ExcelServisi
     /// Yüklenen xlsx dosyasının ilk sayfasını okur; başlıkları normalize edip
     /// her veri satırını başlık→değer sözlüğü olarak döndürür (satır numarasıyla birlikte).
     /// </summary>
+    /// <summary>
+    /// Tek dosyadan okunacak en fazla veri satırı. Yüklenen dosya 10 MB ile sınırlı olsa da
+    /// sıkıştırılmış bir çalışma kitabı bellekte çok daha fazla yer kaplayabilir; tavan bunu keser.
+    /// </summary>
+    public const int EnFazlaSatir = 50_000;
+
     public static List<(int SatirNo, Dictionary<string, string> Degerler)> Oku(Stream dosya)
     {
         using var kitap = new XLWorkbook(dosya);
@@ -62,17 +68,36 @@ public static class ExcelServisi
             for (var i = 0; i < basliklar.Count; i++)
             {
                 if (string.IsNullOrEmpty(basliklar[i])) continue;
-                degerler[basliklar[i]] = satir.Cell(i + 1).GetString().Trim();
+                degerler[basliklar[i]] = HucreMetni(satir.Cell(i + 1));
             }
             if (degerler.Values.All(string.IsNullOrWhiteSpace)) continue;
             sonuc.Add((satir.RowNumber(), degerler));
+            if (sonuc.Count >= EnFazlaSatir)
+                throw new InvalidOperationException($"Dosyada {EnFazlaSatir:N0} satırdan fazla veri var; dosyayı bölerek yükleyin.");
         }
         return sonuc;
     }
 
+    /// <summary>
+    /// Hücreyi metne çevirir. Gerçek tarih hücreleri makinenin kültürüne göre biçimlenirse
+    /// (12/20/1978 mi 20/12/1978 mi?) geri okuma bozulur; bu yüzden tarihler sabit ISO biçimine çevrilir.
+    /// </summary>
+    private static string HucreMetni(IXLCell hucre) =>
+        hucre.DataType == XLDataType.DateTime && hucre.TryGetValue<DateTime>(out var tarih)
+            ? tarih.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture)
+            : hucre.GetString().Trim();
+
     /// <summary>Başlıkları Türkçe karakter/boşluk/büyük-küçük farklarına dayanıklı hale getirir.</summary>
-    public static string Normalize(string baslik) => baslik.Trim().ToLowerInvariant()
-        .Replace("ç", "c").Replace("ğ", "g").Replace("ı", "i").Replace("i̇", "i")
-        .Replace("ö", "o").Replace("ş", "s").Replace("ü", "u")
-        .Replace(" ", "").Replace("/", "").Replace("-", "").Replace("_", "").Replace(".", "");
+    public static string Normalize(string baslik)
+    {
+        // 'İ' (U+0130) ToLowerInvariant ile küçülmediği için Türkçe harfler önce tek tek sadeleştirilir;
+        // aksi halde "YETKİLİ ADI SOYADI" gibi başlıklar hiçbir arama anahtarıyla eşleşmez.
+        var sade = baslik.Trim()
+            .Replace('İ', 'i').Replace('I', 'i').Replace('ı', 'i')
+            .Replace('Ç', 'c').Replace('Ğ', 'g').Replace('Ö', 'o').Replace('Ş', 's').Replace('Ü', 'u');
+        return sade.ToLowerInvariant()
+            .Replace("ç", "c").Replace("ğ", "g").Replace("\u0307", "")
+            .Replace("ö", "o").Replace("ş", "s").Replace("ü", "u")
+            .Replace(" ", "").Replace("/", "").Replace("-", "").Replace("_", "").Replace(".", "");
+    }
 }

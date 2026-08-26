@@ -3,7 +3,13 @@
 import { X } from "lucide-react";
 import { useEffect } from "react";
 
-export function Modal({ open, title, children, onClose }: { open: boolean; title: string; children: React.ReactNode; onClose: () => void }) {
+export function Modal({ open, title, children, onClose, ustBaslik = "Yeni kayıt", genis = false }: {
+  open: boolean; title: string; children: React.ReactNode; onClose: () => void;
+  /** Başlığın üstündeki küçük etiket. */
+  ustBaslik?: string;
+  /** Görüşme tablosu gibi geniş içerik için pencereyi genişletir. */
+  genis?: boolean;
+}) {
   useEffect(() => {
     if (!open) return;
     const close = (event: KeyboardEvent) => event.key === "Escape" && onClose();
@@ -13,8 +19,8 @@ export function Modal({ open, title, children, onClose }: { open: boolean; title
   }, [open, onClose]);
   if (!open) return null;
   return <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-    <section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-      <header><div><span>Yeni kayıt</span><h2 id="modal-title">{title}</h2></div><button className="icon-button" onClick={onClose} aria-label="Pencereyi kapat"><X size={20} /></button></header>
+    <section className={`modal ${genis ? "genis" : ""}`} role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <header><div><span>{ustBaslik}</span><h2 id="modal-title">{title}</h2></div><button className="icon-button" onClick={onClose} aria-label="Pencereyi kapat"><X size={20} /></button></header>
       {children}
     </section>
   </div>;

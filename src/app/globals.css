@@ -11,6 +11,20 @@ html,body{max-width:100%;overflow-x:hidden}.main-content,.stats-grid,.dashboard-
 @media(max-width:1000px){.stats-grid.five{grid-template-columns:repeat(2,minmax(0,1fr))}.content-with-aside{grid-template-columns:minmax(0,1fr) 250px}.dashboard-charts>.panel:last-child .bar-list{grid-template-columns:1fr}.filter-card label{min-width:calc(50% - 14px)}}
 @media(max-width:860px){.content-with-aside{grid-template-columns:1fr}.dashboard-charts{grid-template-columns:1fr}.dashboard-charts>.panel:last-child{grid-column:auto}.donut-wrap{grid-template-columns:minmax(112px,150px) minmax(0,1fr)}.stat-content>strong{font-size:22px}}
 @media(max-width:560px){.main-content{padding-inline:12px}.stats-grid.five,.stats-grid.four{grid-template-columns:1fr}.stat-card{min-height:86px;grid-template-columns:46px minmax(0,1fr)}.stat-icon{width:46px;height:46px}.stat-content>b{white-space:normal;line-height:1.25}.stat-footer small{white-space:normal;line-height:1.25}.dashboard-charts>.panel{padding:14px}.donut-wrap{grid-template-columns:104px minmax(0,1fr);gap:12px}.legend{gap:9px}.legend span{font-size:9px}.bar-list>div{grid-template-columns:minmax(70px,86px) minmax(48px,1fr) auto}.filter-card label{min-width:0}.quick-panel>button b,.quick-panel>button small{white-space:normal}.panel h2{font-size:13px}}
+/* Görüşme satırları üyenin onay durumuna göre renklenir: soldaki şerit + hafif zemin.
+   Renk tek başına anlam taşımasın diye satırda ayrıca "Onay Durumu" rozeti de bulunur. */
+tr.satir-onayli,tr.satir-kararsiz,tr.satir-red{position:relative}
+tr.satir-onayli>td:first-child,tr.satir-kararsiz>td:first-child,tr.satir-red>td:first-child{border-left:3px solid transparent}
+tr.satir-onayli{background:color-mix(in srgb,var(--green) 9%,transparent)}
+tr.satir-onayli>td:first-child{border-left-color:var(--green)}
+tr.satir-kararsiz{background:color-mix(in srgb,var(--orange) 12%,transparent)}
+tr.satir-kararsiz>td:first-child{border-left-color:var(--orange)}
+tr.satir-red{background:color-mix(in srgb,var(--red) 9%,transparent)}
+tr.satir-red>td:first-child{border-left-color:var(--red)}
+tr.satir-onayli:hover{background:color-mix(in srgb,var(--green) 16%,transparent)}
+tr.satir-kararsiz:hover{background:color-mix(in srgb,var(--orange) 20%,transparent)}
+tr.satir-red:hover{background:color-mix(in srgb,var(--red) 16%,transparent)}
+.danger-button{height:38px;border:0;border-radius:5px;padding:0 14px;display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:11px;font-weight:600;background:var(--red);color:#fff}.danger-button:disabled,.primary-button:disabled{opacity:.65;cursor:not-allowed}
 @media(max-width:380px){.donut-wrap{grid-template-columns:1fr}.donut{width:112px;margin-inline:auto}.legend span{grid-template-columns:9px minmax(0,1fr) auto}.legend span>b{grid-column:auto}.date-pill{max-width:48px;overflow:hidden}.profile{display:none}}
 
 /* Kullanıcı profil menüsü */
@@ -261,3 +275,218 @@ select option:disabled{color:var(--muted)}
 /* İçerik silüetin üstünde kalsın */
 .brand,.side-nav,.logout,.sidebar-close{position:relative;z-index:1}
 .logout{margin-top:auto;padding:14px;margin-bottom:6px}
+
+/* ── Özet kartları: 5 kart her zaman tek satırda ──────────────────────────────
+   Önceki kurallar 1400px altında 3, 1000px altında 2 sütuna düşürüyordu. Sütun
+   sayısını sabitleyip kartın kendisini akışkan hale getiriyoruz: ikon, sayı ve
+   etiket clamp() ile ekran genişliğine göre küçülür, böylece kırılma noktasında
+   zıplama olmaz. Telefonda (<560px) beş sütun okunmaz olacağı için tek sütuna iner. */
+.stats-grid{gap:clamp(6px,0.6vw,10px)}
+.stats-grid.five{grid-template-columns:repeat(5,minmax(0,1fr))}
+.stats-grid.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+.stat-card{
+  height:auto;min-height:clamp(78px,7vw,98px);
+  display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;
+  gap:clamp(7px,0.9vw,13px);padding:clamp(9px,0.9vw,14px);
+}
+.stat-icon{width:clamp(34px,3.2vw,52px);height:clamp(34px,3.2vw,52px);border-radius:clamp(6px,0.6vw,8px)}
+.stat-icon>svg{width:clamp(17px,1.7vw,27px);height:auto}
+/* Etiket ve alt metin artık kesilmiyor; dar ekranda alt satıra sarıyor. */
+.stat-content>b{font-size:clamp(9.5px,0.74vw,11px);line-height:1.25;white-space:normal;overflow:visible;text-overflow:clip}
+.stat-content>strong{font-size:clamp(15px,1.5vw,23px);margin:2px 0}
+.stat-footer small{font-size:clamp(8.5px,0.66vw,10px);line-height:1.25;white-space:normal;overflow:visible;text-overflow:clip}
+@media(max-width:560px){
+  .stats-grid.five,.stats-grid.four{grid-template-columns:1fr}
+  .stat-card{min-height:86px;grid-template-columns:46px minmax(0,1fr)}
+  .stat-icon{width:46px;height:46px}
+  .stat-icon>svg{width:24px}
+}
+
+/* ── Filtre çubuğu: tek satır ─────────────────────────────────────────────────
+   Önceki kurallar 1400px altında sarmaya geçiyor, etiketlere 180px alt sınır
+   koyuyordu; alanlar alt satıra taşıyordu. Artık alanlar esneyerek sığıyor.
+   Ayrıca stil yalnızca `select`e uygulandığı için tarih girdileri ham görünüyordu. */
+.filter-card{
+  flex-wrap:wrap;align-items:flex-end;gap:clamp(10px,1.1vw,18px);
+  min-height:0;padding:15px 18px;
+}
+/* 150px taban: alanlar sığdığı sürece tek satırda kalıp genişliğe yayılır, sığmazsa
+   ezilmek yerine alt satıra iner. Filtre sayısı sayfadan sayfaya değiştiği için
+   sabit sütun yerine bu esnek taban kullanılıyor. */
+.filter-card label,.filter-card .filter-select{min-width:0;flex:1 1 150px;display:block}
+.filter-card label>span,.filter-card .filter-select>span{
+  font-size:11px;font-weight:700;display:block;margin-bottom:7px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+/* Açılır liste, metin ve tarih girdileri aynı ölçüde ve aynı çerçevede. */
+.filter-select select,.filter-select input,.filter-search div{
+  width:100%;height:36px;border:1px solid #d7e0ed;border-radius:6px;background:#fff;
+  padding:0 10px;font-size:12px;color:inherit;
+}
+.filter-select select:focus,.filter-select input:focus{
+  outline:0;border-color:var(--blue);box-shadow:0 0 0 3px rgba(7,102,237,.1);
+}
+/* Tarih aralığı: iki girdi tek kutu gibi, aralarında ayraç. */
+.filter-range{flex:1.6 1 240px}
+.date-range{display:flex;align-items:center;gap:7px}
+.date-range input{min-width:0;flex:1 1 0}
+.date-range i{font-style:normal;color:var(--muted);flex:0 0 auto;font-size:13px}
+/* Safari/Chrome tarih girdisinin takvim simgesi kutunun içine hizalanır. */
+.filter-select input[type="date"]::-webkit-calendar-picker-indicator{opacity:.55;cursor:pointer}
+.filter-select input[type="date"]::-webkit-calendar-picker-indicator:hover{opacity:1}
+/* Butonlar alanlarla aynı hizada, yan yana. */
+.filter-actions{flex:0 0 auto;min-width:0;flex-direction:row;align-items:center;gap:10px}
+.filter-actions .reset-button{white-space:nowrap}
+@media(max-width:1100px){
+  .filter-card label,.filter-card .filter-select{flex:1 1 190px}
+  .filter-range{flex:1 1 280px}
+  .filter-actions{flex:1 1 100%;justify-content:flex-end}
+}
+@media(max-width:560px){
+  .filter-card{display:grid;grid-template-columns:1fr;gap:12px}
+  .filter-actions{flex-direction:column;align-items:stretch}
+  .filter-actions .dark-button,.filter-actions .secondary-button,.filter-actions .reset-button{width:100%}
+}
+
+/* ── Üye kartı ve görüşme bölümü ──────────────────────────────────────────────
+   Görüşmeler ayrı bir sayfa değil, üyenin kendi kartında yönetiliyor. */
+.modal.genis{width:min(1040px,100%)}
+tr.tiklanabilir{cursor:pointer}
+tr.tiklanabilir:hover{background:#f4f8fd}
+.gorusme-bolumu{margin-top:20px;border-top:1px solid var(--line);padding-top:16px}
+.gorusme-bolumu>header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.gorusme-bolumu h3{margin:0;font-size:14px}
+.gorusme-bolumu table{min-width:720px}
+.gorusme-bolumu .table-scroll{border:1px solid var(--line);border-radius:6px}
+.gorusme-bos{color:var(--muted);font-size:12px;background:#f7f9fc;border:1px dashed var(--line);border-radius:6px;padding:16px;margin:0;text-align:center}
+.gorusme-not{max-width:280px;white-space:normal;line-height:1.35}
+
+/* ── Çoklu seçimli süzgeç ─────────────────────────────────────────────────────
+   Aynı süzgeçte birden çok değer seçilebilir; kutu, açılır listedeki onay
+   kutularıyla aynı yüksekliği ve çerçeveyi paylaşır. */
+.coklu-secim{position:relative}
+.coklu-kutu{
+  width:100%;height:36px;border:1px solid #d7e0ed;border-radius:6px;background:#fff;
+  padding:0 8px 0 10px;font-size:12px;display:flex;align-items:center;gap:6px;text-align:left;
+}
+.coklu-kutu>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+.coklu-kutu.dolu>span{color:var(--text);font-weight:600}
+.coklu-kutu>b{background:var(--blue);color:#fff;border-radius:9px;font-size:9px;padding:2px 6px;flex:0 0 auto}
+.coklu-kutu:hover{border-color:#b9c9e0}
+.coklu-kutu.acik{border-color:var(--blue);box-shadow:0 0 0 3px rgba(7,102,237,.1)}
+.coklu-panel{
+  position:absolute;z-index:40;top:calc(100% + 5px);left:0;min-width:100%;max-width:340px;
+  background:#fff;border:1px solid var(--line);border-radius:7px;box-shadow:0 14px 34px rgba(6,28,66,.16);
+  padding:7px;
+}
+.coklu-arama{width:100%;height:32px;border:1px solid #d7e0ed;border-radius:5px;padding:0 9px;font-size:12px;margin-bottom:6px;outline:0}
+.coklu-arama:focus{border-color:var(--blue)}
+.coklu-liste{max-height:250px;overflow-y:auto;display:flex;flex-direction:column;gap:1px}
+.coklu-liste>button{
+  display:flex;align-items:center;gap:9px;width:100%;border:0;background:transparent;
+  padding:7px 8px;border-radius:5px;font-size:12px;text-align:left;
+}
+.coklu-liste>button:hover{background:#f1f6fd}
+.coklu-liste>button>i{
+  width:16px;height:16px;border:1px solid #c3d0e2;border-radius:4px;flex:0 0 auto;
+  display:grid;place-items:center;color:#fff;
+}
+.coklu-liste>button.secili>i{background:var(--blue);border-color:var(--blue)}
+.coklu-liste>button>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.coklu-bos{margin:0;padding:10px;color:var(--muted);font-size:11px;text-align:center}
+.coklu-panel>footer{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  border-top:1px solid var(--line);margin-top:6px;padding-top:7px;font-size:11px;color:var(--muted);
+}
+.coklu-panel>footer button{border:0;background:transparent;color:var(--blue);font-size:11px;font-weight:600}
+
+/* Aktif süzgeçte genel toplamın yanına grup/filtre kapsamı kartı gelir. */
+.stats-grid.six{grid-template-columns:repeat(6,minmax(0,1fr))}
+@media(max-width:1400px){.stats-grid.six{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:860px){.stats-grid.six{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.stats-grid.six{grid-template-columns:1fr}}
+
+/* ── Tam ekran üye listesi ───────────────────────────────────────────────────
+   Listeyi günlük çalışma için bağımsız bir yüzeye taşır; sidebar ve üst bar bu
+   katmanın altında kalır. Filtreler daha sıkı, tablo başlığı sabittir. */
+.table-view-toolbar{display:flex;align-items:center;border-bottom:1px solid var(--line);min-width:0}
+.table-view-toolbar .tabs{flex:1;min-width:0;border-bottom:0}
+.open-fullscreen-button{
+  height:34px;margin:0 13px;padding:0 13px;flex:0 0 auto;border:1px solid #cbd9ec;border-radius:7px;
+  background:#f7faff;color:#075bce;display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:700;
+  transition:border-color .18s,background .18s,transform .18s;
+}
+.open-fullscreen-button:hover{background:#eaf3ff;border-color:#8fb7ed;transform:translateY(-1px)}
+
+.fullscreen-list-view{
+  position:fixed;inset:0;z-index:80;background:linear-gradient(145deg,#f5f8fc 0%,#eef4fb 100%);
+  padding:14px 18px 16px;display:flex;flex-direction:column;gap:11px;overflow:hidden;
+}
+.fullscreen-list-header{
+  min-height:58px;display:flex;align-items:center;justify-content:space-between;gap:20px;
+  background:#fff;border:1px solid #dbe4f0;border-radius:12px;padding:9px 11px 9px 14px;
+  box-shadow:0 7px 24px rgba(6,31,69,.07);
+}
+.fullscreen-list-title{display:flex;align-items:center;gap:11px;min-width:0}
+.fullscreen-list-title>span{width:40px;height:40px;border-radius:10px;background:#e8f1ff;color:var(--blue);display:grid;place-items:center;flex:0 0 auto}
+.fullscreen-list-title div{min-width:0}
+.fullscreen-list-title small{display:block;color:#72819a;font-size:9px;font-weight:800;letter-spacing:1.1px;margin-bottom:2px}
+.fullscreen-list-title h1{font-size:20px;line-height:1.15;margin:0;color:var(--navy)}
+.fullscreen-list-actions{display:flex;align-items:center;gap:12px;flex:0 0 auto}
+.fullscreen-record-count{color:#65748c;font-size:11px;border-right:1px solid var(--line);padding-right:13px;white-space:nowrap}
+.fullscreen-record-count b{font-size:15px;color:var(--navy);margin-right:4px}
+.fullscreen-close-button{
+  height:36px;border:0;border-radius:8px;background:linear-gradient(120deg,#071d43,#063468);color:#fff;
+  display:inline-flex;align-items:center;gap:8px;padding:0 12px;font-size:11px;font-weight:700;
+  box-shadow:0 5px 14px rgba(3,32,70,.16);
+}
+.fullscreen-close-button:hover{background:linear-gradient(120deg,#0a2859,#07509c)}
+.fullscreen-close-button kbd{border:1px solid rgba(255,255,255,.28);border-radius:4px;padding:2px 5px;font:9px ui-monospace,SFMono-Regular,Menlo,monospace;color:#dbe9fb}
+
+.fullscreen-compact-filter .filter-card{
+  margin:0;min-height:0;padding:9px 11px;border-radius:11px;display:grid;
+  grid-template-columns:minmax(190px,1.35fr) repeat(6,minmax(128px,1fr)) auto;
+  gap:9px;align-items:end;box-shadow:0 5px 19px rgba(6,31,69,.055);
+}
+.fullscreen-compact-filter .filter-card label,
+.fullscreen-compact-filter .filter-card .filter-select{min-width:0;flex:none}
+.fullscreen-compact-filter .filter-card label>span,
+.fullscreen-compact-filter .filter-card .filter-select>span{font-size:9px;margin-bottom:5px}
+.fullscreen-compact-filter .filter-search div,
+.fullscreen-compact-filter .filter-select select,
+.fullscreen-compact-filter .coklu-kutu{height:31px;font-size:10px}
+.fullscreen-compact-filter .filter-actions{align-self:end;height:31px;flex-wrap:nowrap}
+.fullscreen-compact-filter .reset-button{height:31px;padding:0 9px;border:1px solid #d8e2ef;border-radius:6px;background:#f8fafd;font-size:10px}
+
+.fullscreen-table-panel{flex:1;min-height:0;border-radius:11px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 25px rgba(6,31,69,.07)}
+.fullscreen-table-tabs{display:flex;align-items:center;border-bottom:1px solid var(--line);flex:0 0 auto}
+.fullscreen-table-tabs .tabs{flex:1;min-width:0;border-bottom:0}
+.fullscreen-loading{margin:0 14px;color:#348655;font-size:10px;font-weight:700;white-space:nowrap}
+.fullscreen-loading:before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:#38a45b;margin-right:6px}
+.fullscreen-loading.active{color:#8a6500}
+.fullscreen-loading.active:before{background:#f0a313;box-shadow:0 0 0 4px rgba(240,163,19,.12)}
+.fullscreen-table-panel .table-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain}
+.fullscreen-table-panel table{min-width:1320px}
+.fullscreen-table-panel th{position:sticky;top:0;z-index:2;box-shadow:inset 0 -1px 0 var(--line)}
+.fullscreen-table-panel td{height:48px}
+.fullscreen-table-panel .pagination{flex:0 0 52px;border-top:1px solid var(--line);background:#fff}
+
+@media(max-width:1500px){
+  .fullscreen-compact-filter .filter-card{grid-template-columns:repeat(4,minmax(155px,1fr))}
+  .fullscreen-compact-filter .filter-actions{justify-content:flex-end}
+}
+@media(max-width:860px){
+  .fullscreen-list-view{padding:9px;gap:8px}
+  .fullscreen-list-header{align-items:flex-start}
+  .fullscreen-record-count{display:none}
+  .fullscreen-close-button{font-size:0;gap:0}.fullscreen-close-button svg{width:18px}.fullscreen-close-button kbd{display:none}
+  .fullscreen-compact-filter .filter-card{grid-template-columns:repeat(2,minmax(0,1fr));max-height:190px;overflow:auto}
+  .fullscreen-compact-filter .filter-actions{grid-column:1/-1}
+}
+@media(max-width:560px){
+  .table-view-toolbar{align-items:flex-start;flex-direction:column}.table-view-toolbar .tabs{width:100%}
+  .open-fullscreen-button{align-self:flex-end;margin:8px 12px}
+  .fullscreen-list-title small{display:none}.fullscreen-list-title h1{font-size:17px}
+  .fullscreen-compact-filter .filter-card{grid-template-columns:1fr}
+  .fullscreen-compact-filter .filter-actions{grid-column:auto}
+}

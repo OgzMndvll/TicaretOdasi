@@ -9,7 +9,11 @@ namespace EtsoApi.Controllers;
 [Route("api/[controller]")]
 public class GorevlendirmelerController(EtsoDbContext db) : ControllerBase
 {
-    private static readonly string[] GecerliDurumlar = ["Aktif", "Tamamlandı", "İptal Edildi"];
+    private static readonly string[] GecerliDurumlar = ["Bekleyen", "Aktif", "Reddedildi", "Tamamlandı", "İptal Edildi"];
+
+    // Yöneticinin düzenleme ekranından atayabileceği durumlar. Kabul ("Aktif") ve ret ("Reddedildi")
+    // kararı görevlendirilen kişiye aittir ve yalnızca /karar ucundan verilir.
+    private static readonly string[] YoneticiDurumlari = ["Aktif", "Tamamlandı", "İptal Edildi"];
 
     [HttpGet]
     public async Task<IActionResult> Listele(
@@ -36,7 +40,7 @@ public class GorevlendirmelerController(EtsoDbContext db) : ControllerBase
             .Take(sayfaBoyutu)
             .Select(g => new
             {
-                g.Id, g.Tarih, g.Not, g.Durum,
+                g.Id, g.Tarih, g.Not, g.Durum, g.RedMazereti, g.KararTarihi,
                 g.GorevliId, Gorevli = g.Gorevli!.AdSoyad,
                 g.EsnafId, Esnaf = g.Esnaf != null ? g.Esnaf.AdSoyad : null,
                 Isletme = g.Esnaf != null ? g.Esnaf.Isletme : null,
@@ -62,7 +66,9 @@ public class GorevlendirmelerController(EtsoDbContext db) : ControllerBase
         return Ok(new
         {
             toplam = gruplu.Sum(g => g.Adet),
+            bekleyen = Say("Bekleyen"),
             aktif = Say("Aktif"),
+            reddedilen = Say("Reddedildi"),
             tamamlanan = Say("Tamamlandı"),
             iptalEdilen = Say("İptal Edildi"),
         });
@@ -84,8 +90,7 @@ public class GorevlendirmelerController(EtsoDbContext db) : ControllerBase
             GrupId = dto.GrupId,
             Tarih = dto.Tarih == default ? DateTime.UtcNow : dto.Tarih,
             Not = dto.Not,
-            // Görevlendirmeler kabul adımı olmadan doğrudan görevliye atanır.
-            Durum = "Aktif",
+            Durum = "Bekleyen",
         };
         db.Gorevlendirmeler.Add(gorevlendirme);
         await db.SaveChangesAsync();
@@ -101,14 +106,70 @@ public class GorevlendirmelerController(EtsoDbContext db) : ControllerBase
         if (!string.IsNullOrWhiteSpace(dto.Durum) && !GecerliDurumlar.Contains(dto.Durum))
             return BadRequest(new { mesaj = $"Geçersiz durum. Geçerli değerler: {string.Join(", ", GecerliDurumlar)}" });
 
+        var yeniDurum = string.IsNullOrWhiteSpace(dto.Durum) ? gorevlendirme.Durum : dto.Durum;
+        if (yeniDurum != gorevlendirme.Durum)
+        {
+            // Bekleyen bir görevlendirmede yönetici görevlinin yerine karar veremez; yalnızca iptal edebilir.
+            if (gorevlendirme.Durum == "Bekleyen" && yeniDurum != "İptal Edildi")
+                return BadRequest(new { mesaj = "Karar bekleyen görevlendirme yalnızca iptal edilebilir; kabul veya reddi görevlendirilen kişi yapar." });
+            // Mazeretsiz ret yazılamaz: ret yalnızca görevlinin karar ekranından, mazeretiyle birlikte kaydedilir.
+            if (!YoneticiDurumlari.Contains(yeniDurum))
+                return BadRequest(new { mesaj = $"Bu durum yönetici tarafından atanamaz. Atanabilir değerler: {string.Join(", ", YoneticiDurumlari)}" });
+        }
+
+        var gorevliDegisti = dto.GorevliId != gorevlendirme.GorevliId;
+
         gorevlendirme.GorevliId = dto.GorevliId;
         gorevlendirme.EsnafId = dto.EsnafId;
         gorevlendirme.GrupId = dto.GrupId;
         if (dto.Tarih != default) gorevlendirme.Tarih = dto.Tarih;
         gorevlendirme.Not = dto.Not;
-        if (!string.IsNullOrWhiteSpace(dto.Durum)) gorevlendirme.Durum = dto.Durum;
+        gorevlendirme.Durum = yeniDurum;
+
+        // Görev başka bir kişiye devredildiyse onay yeniden alınır: eski kararın ve mazeretin hükmü kalmaz.
+        if (gorevliDegisti && gorevlendirme.Durum is "Aktif" or "Reddedildi")
+        {
+            gorevlendirme.Durum = "Bekleyen";
+            gorevlendirme.RedMazereti = null;
+            gorevlendirme.KararTarihi = null;
+        }
+
         await db.SaveChangesAsync();
         return NoContent();
+    }
+
+    [HttpPut("{id:int}/karar")]
+    public async Task<IActionResult> KararVer(int id, GorevlendirmeKararDto dto)
+    {
+        var kullaniciId = User.KullaniciId();
+        var gorevlendirme = await db.Gorevlendirmeler.FindAsync(id);
+        if (gorevlendirme is null) return NotFound();
+        if (gorevlendirme.GorevliId != kullaniciId) return Forbid();
+        if (gorevlendirme.Durum != "Bekleyen")
+            return BadRequest(new { mesaj = "Bu görevlendirme için karar verilmiş." });
+
+        if (dto.Durum == "Aktif")
+        {
+            gorevlendirme.Durum = "Aktif";
+            gorevlendirme.RedMazereti = null;
+            gorevlendirme.KararTarihi = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return NoContent();
+        }
+
+        if (dto.Durum == "Reddedildi")
+        {
+            if (string.IsNullOrWhiteSpace(dto.RedMazereti))
+                return BadRequest(new { mesaj = "Reddetmek için mazeret yazılması zorunludur." });
+
+            gorevlendirme.Durum = "Reddedildi";
+            gorevlendirme.RedMazereti = dto.RedMazereti.Trim();
+            gorevlendirme.KararTarihi = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return NoContent();
+        }
+
+        return BadRequest(new { mesaj = "Geçersiz karar. 'Aktif' veya 'Reddedildi' gönderilmelidir." });
     }
 
     [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Yönetici")]

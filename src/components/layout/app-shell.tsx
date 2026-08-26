@@ -4,10 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
-import { girisliMi, kimlik, yoneticiMi } from "@/lib/auth";
-
-// Görevli rolünün erişebildiği sayfalar; diğer adresler görevlendirmelere yönlendirilir.
-const GOREVLI_SAYFALARI = ["/gorevlendirmeler", "/gorusmeler", "/ayarlar"];
+import { girisliMi, kimlik } from "@/lib/auth";
 
 export function AppShell({ title, children }: { title: string; children: React.ReactNode }) {
   const router = useRouter();
@@ -18,10 +15,6 @@ export function AppShell({ title, children }: { title: string; children: React.R
   useEffect(() => {
     if (!girisliMi()) {
       router.replace("/giris");
-      return;
-    }
-    if (!yoneticiMi() && !GOREVLI_SAYFALARI.some(s => pathname.startsWith(s))) {
-      router.replace("/gorevlendirmeler");
       return;
     }
     setHazir(true);

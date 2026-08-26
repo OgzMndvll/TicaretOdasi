@@ -23,6 +23,8 @@ public class AyarlarController(EtsoDbContext db) : ControllerBase
     public async Task<IActionResult> Kaydet([FromBody] Dictionary<string, string> gelen)
     {
         if (gelen.Count == 0) return BadRequest(new { mesaj = "Kaydedilecek ayar bulunamadı." });
+        // Tek istekte sınırsız anahtar yazılıp tablo şişirilemesin.
+        if (gelen.Count > 100) return BadRequest(new { mesaj = "Tek seferde en fazla 100 ayar kaydedilebilir." });
         if (gelen.Keys.Any(k => k.Length > 80) || gelen.Values.Any(v => v.Length > 2000))
             return BadRequest(new { mesaj = "Ayar anahtarı veya değeri çok uzun." });
 

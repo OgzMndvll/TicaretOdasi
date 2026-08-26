@@ -12,7 +12,7 @@ const VARSAYILANLAR: Record<string, string> = {
   dil: "Türkçe", saatDilimi: "(UTC+03:00) İstanbul", tarihFormati: "GG.AA.YYYY", saatFormati: "24 Saat", sayfaBoyutu: "20",
   kurumAdi: "Erzurum Ticaret Odası", kurumKisaAd: "ETO", kurumVergiNo: "381 004 8045",
   kurumAdres: "Muratpaşa Mah. Yakutiye / Erzurum", kurumTelefon: "0442 234 00 00", kurumEposta: "info@erzto.org.tr",
-  bildirimEposta: "1", bildirimSistem: "1", bildirimGorevlendirme: "1", bildirimOnay: "1", bildirimGorusme: "1",
+  bildirimEposta: "1", bildirimSistem: "1", bildirimGorevlendirme: "1", bildirimGorusme: "1",
   oturumZamanAsimi: "30 dakika", sifreGecerlilik: "90 gün", ikiAsamali: "Zorunlu", girisDenemeLimiti: "5 deneme",
 };
 
@@ -130,7 +130,7 @@ export function SettingsPage() {
         {yonetici && <section className="panel settings-card" id="ayar-bildirim">
           <header><div><h2>Bildirim Ayarları</h2><p>Sistem içi ve e-posta bildirim tercihlerini yönetin. Değişiklikler anında kaydedilir.</p></div><span className="stat-icon purple"><Bell size={24} /></span></header>
           <div className="toggle-list">
-            {[["bildirimEposta", "E-posta Bildirimleri"], ["bildirimSistem", "Sistem İçi Bildirimler"], ["bildirimGorevlendirme", "Görevlendirme Bildirimleri"], ["bildirimOnay", "Onay Bildirimleri"], ["bildirimGorusme", "Görüşme Hatırlatmaları"]].map(([anahtar, etiket]) =>
+            {[["bildirimEposta", "E-posta Bildirimleri"], ["bildirimSistem", "Sistem İçi Bildirimler"], ["bildirimGorusme", "Görüşme Hatırlatmaları"]].map(([anahtar, etiket]) =>
               <label key={anahtar}><span>{etiket}</span>
                 <input type="checkbox" checked={deger(anahtar) === "1"} onChange={e => bildirimKaydet(anahtar, e.target.checked)} /><i />
               </label>)}
