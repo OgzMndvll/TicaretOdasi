@@ -13,7 +13,7 @@ import { Modal } from "@/components/ui/modal";
 import { StatCard } from "@/components/ui/stat-card";
 import { Toast } from "@/components/ui/toast";
 import {
-  api, ApiError, durumTonu, sayiGoster, tarihGoster, yuzde,
+  api, ApiError, API_ERISIM_HATASI, durumTonu, sayiGoster, tarihGoster, yuzde,
   EsnafKaydi, GorusmeKaydi, GrupKaydi, KullaniciKaydi, OnayKaydi, Sayfali,
 } from "@/lib/api";
 import { kimlik, yoneticiMi } from "@/lib/auth";
@@ -176,7 +176,7 @@ export function ModulePage({ kind }: { kind: PageKind }) {
           }
         }
       } catch {
-        if (!iptal) setHata("Veriler alınamadı. API'nin çalıştığından emin olun (http://localhost:5180).");
+        if (!iptal) setHata(API_ERISIM_HATASI);
       } finally {
         if (!iptal) setYukleniyor(false);
       }

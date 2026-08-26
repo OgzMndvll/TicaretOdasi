@@ -8,7 +8,7 @@ import { BarList, DonutChart, LineChart } from "@/components/ui/charts";
 import { FilterBar, FiltreSecim } from "@/components/ui/filter-bar";
 import { StatCard } from "@/components/ui/stat-card";
 import { Toast } from "@/components/ui/toast";
-import { api, DashboardOzet, GrupKaydi, durumTonu, sayiGoster, tarihGoster, yuzde } from "@/lib/api";
+import { api, API_ERISIM_HATASI, DashboardOzet, GrupKaydi, durumTonu, sayiGoster, tarihGoster, yuzde } from "@/lib/api";
 
 /** Bugünden n gün önceki tarihi date girdisinin beklediği "yyyy-aa-gg" biçiminde verir. */
 function gunOnce(n: number): string {
@@ -51,7 +51,7 @@ export function DashboardPage() {
     if (bitis) params.set("bitis", bitis);
     api.get<DashboardOzet>(`/api/dashboard?${params}`)
       .then(v => { setOzet(v); setHata(""); })
-      .catch(() => setHata("Veriler alınamadı. API'nin çalıştığından emin olun (http://localhost:5180)."));
+      .catch(() => setHata(API_ERISIM_HATASI));
   }, [grupId, baslangic, bitis]);
 
   useEffect(() => { yukle(); }, [yukle]);
