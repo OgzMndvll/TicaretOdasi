@@ -8,7 +8,7 @@ namespace EtsoApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class EsnaflarController(EtsoDbContext db) : ControllerBase
+public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> Listele(
@@ -19,11 +19,13 @@ public class EsnaflarController(EtsoDbContext db) : ControllerBase
         [FromQuery] string? arama, [FromQuery] string? sirala,
         [FromQuery] int sayfa = 1, [FromQuery] int sayfaBoyutu = 20)
     {
+        // Onay durumu süzgeci bilerek en sona bırakılır: üstteki durum kartları, durum dışındaki
+        // tüm süzgeçlerin kapsamından hesaplanır. Böylece "Onay Veren" sekmesine geçildiğinde
+        // diğer kartlar sıfıra düşmez; seçili grup/ilçe gibi süzgeçler kartlara yansımayı sürdürür.
         var sorgu = db.Esnaflar.AsNoTracking();
 
         // Aynı süzgeçte birden çok değer VEYA, farklı süzgeçler VE ile birleşir:
         // "(2. veya 5. grup) VE (onay verdi veya kararsız)".
-        if (Dolu(durum)) sorgu = sorgu.Where(e => durum!.Contains(e.Durum));
         if (Dolu(uyelikDurumu)) sorgu = sorgu.Where(e => uyelikDurumu!.Contains(e.UyelikDurumu));
         if (Dolu(grupId)) sorgu = sorgu.Where(e => e.GrupId != null && grupId!.Contains(e.GrupId.Value));
         if (Dolu(gorevliId)) sorgu = sorgu.Where(e => e.GorevliId != null && gorevliId!.Contains(e.GorevliId.Value));
@@ -48,8 +50,15 @@ public class EsnaflarController(EtsoDbContext db) : ControllerBase
             .GroupBy(e => e.Durum)
             .Select(g => new { Durum = g.Key, Adet = g.Count() })
             .ToListAsync();
-        var toplam = durumSayilari.Sum(g => g.Adet);
         int DurumSayisi(string deger) => durumSayilari.FirstOrDefault(g => g.Durum == deger)?.Adet ?? 0;
+        // Durum kartlarının paydası: onay durumu süzgeci uygulanmadan önceki kapsam.
+        var kapsamToplam = durumSayilari.Sum(g => g.Adet);
+
+        // Tablo ve sayfalama, onay durumu süzgeci de uygulanmış hâli üzerinden çalışır.
+        if (Dolu(durum)) sorgu = sorgu.Where(e => durum!.Contains(e.Durum));
+        var toplam = Dolu(durum)
+            ? durumSayilari.Where(g => durum!.Contains(g.Durum)).Sum(g => g.Adet)
+            : kapsamToplam;
         var genelToplam = await db.Esnaflar.AsNoTracking().CountAsync();
         sayfaBoyutu = Math.Clamp(sayfaBoyutu, 1, 100);
         sayfa = Math.Max(sayfa, 1);
@@ -87,6 +96,8 @@ public class EsnaflarController(EtsoDbContext db) : ControllerBase
                 genelToplam,
                 // Grup kartı tüm diğer aktif süzgeçleri de dikkate alan gerçek liste toplamıdır.
                 grupToplam = Dolu(grupId) ? toplam : 0,
+                // Durum kartlarının kapsamı ve paydası (onay durumu süzgeci hariç).
+                kapsamToplam,
                 onayVeren = DurumSayisi("Onay Verdi"),
                 onayVermeyen = DurumSayisi("Onay Vermedi"),
                 kararsiz = DurumSayisi("Kararsız"),
@@ -208,6 +219,8 @@ public class EsnaflarController(EtsoDbContext db) : ControllerBase
         OdaBilgileriniYaz(esnaf, dto);
         db.Esnaflar.Add(esnaf);
         await db.SaveChangesAsync();
+        // Kayıt değişti: bağlı paneller listeyi kendiliğinden tazeler (bkz. Services/CanliBildirim.cs).
+        await canli.DegistiAsync("esnaf", esnaf.Id);
         return CreatedAtAction(nameof(Getir), new { id = esnaf.Id }, new { esnaf.Id });
     }
 
@@ -235,6 +248,7 @@ public class EsnaflarController(EtsoDbContext db) : ControllerBase
         if (!string.IsNullOrWhiteSpace(dto.Durum)) esnaf.Durum = dto.Durum;
         OdaBilgileriniYaz(esnaf, dto);
         await db.SaveChangesAsync();
+        await canli.DegistiAsync("esnaf", esnaf.Id);
         return NoContent();
     }
 
@@ -246,6 +260,7 @@ public class EsnaflarController(EtsoDbContext db) : ControllerBase
         if (esnaf is null) return NotFound();
         db.Esnaflar.Remove(esnaf);
         await db.SaveChangesAsync();
+        await canli.DegistiAsync("esnaf", id);
         return NoContent();
     }
 
@@ -381,6 +396,8 @@ public class EsnaflarController(EtsoDbContext db) : ControllerBase
         if (satirlar.Count == 0)
             return BadRequest(new { mesaj = "Dosyada veri satırı bulunamadı. Şablonu indirip doldurun." });
 
-        return Ok(await UyeIceAktarmaServisi.AktarAsync(db, satirlar));
+        var sonuc = await UyeIceAktarmaServisi.AktarAsync(db, satirlar);
+        await canli.DegistiAsync("esnaf");
+        return Ok(sonuc);
     }
 }

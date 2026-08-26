@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using EtsoApi;
 using EtsoApi.Controllers;
 using EtsoApi.Data;
+using EtsoApi.Hubs;
 using EtsoApi.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -29,14 +30,22 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddSingleton<TokenServisi>();
 
+// Canlı veri kanalı: bir kayıt eklenip güncellendiğinde bağlı panellere haber verilir,
+// panel de veriyi kendi yetkisiyle yeniden okur (bkz. Hubs/PanelHub.cs).
+builder.Services.AddSignalR();
+builder.Services.AddScoped<CanliBildirim>();
+
 // Ters vekil (nginx vb.) arkasında gerçek istemci IP'si — rate limit'in doğru çalışması için şart.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto);
 
+// Kaynaklar tek tek sayıldığı için AllowCredentials güvenlidir (joker "*" ile birlikte
+// kullanılamaz ve zaten kullanılmıyor). SignalR'ın tarayıcı istemcisi için gereklidir.
 builder.Services.AddCors(options => options.AddPolicy("frontend", policy =>
     policy.WithOrigins(builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? ["http://localhost:3000"])
         .AllowAnyHeader()
         .AllowAnyMethod()
+        .AllowCredentials()
         .WithExposedHeaders("Content-Disposition")));
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -61,6 +70,17 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         // elindeki token ile eski yetkileriyle çalışmaya devam ederdi.
         options.Events = new JwtBearerEvents
         {
+            // WebSocket el sıkışmasında tarayıcı Authorization başlığı gönderemez; SignalR jetonu
+            // sorgu dizesinde taşır. Yalnızca /hubs yolunda okunur — normal API yollarında da kabul
+            // edilseydi jeton, adres çubuğuna ya da vekil sunucu günlüklerine yazılabilir hale gelirdi.
+            OnMessageReceived = ctx =>
+            {
+                var jeton = ctx.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(jeton) && ctx.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                    ctx.Token = jeton;
+                return Task.CompletedTask;
+            },
+
             OnTokenValidated = async ctx =>
             {
                 var db = ctx.HttpContext.RequestServices.GetRequiredService<EtsoDbContext>();
@@ -362,8 +382,11 @@ app.Use(async (context, next) =>
     var baslangic = DateTime.Now;
     await next();
     var kimlik = context.User.Identity?.IsAuthenticated == true ? context.User.Identity.Name ?? "?" : "anonim";
+    // SignalR el sıkışması jetonu sorgu dizesinde taşır; günlüğe yazılmadan önce maskelenir.
+    var yol = System.Text.RegularExpressions.Regex.Replace(
+        context.Request.Path + context.Request.QueryString, "(?i)(access_token=)[^&]*", "${1}***");
     var satir = $"{baslangic:yyyy-MM-dd HH:mm:ss} [{LogGuvenli(kimlik, 60)}] {LogGuvenli(context.Request.Method, 10)} " +
-                $"{LogGuvenli(context.Request.Path + context.Request.QueryString)} -> {context.Response.StatusCode} " +
+                $"{LogGuvenli(yol)} -> {context.Response.StatusCode} " +
                 $"({(DateTime.Now - baslangic).TotalMilliseconds:F0} ms)\n";
     lock (logKilidi)
     {
@@ -378,6 +401,11 @@ app.Use(async (context, next) =>
 });
 
 app.MapControllers();
+
+// Hub, IP başına dakikada 300 istekle sınırlayan genel kuralın dışında tutulur: WebSocket
+// kurulamayıp uzun yoklamaya (long polling) düşüldüğünde her yoklama bir istek sayılır ve
+// aynı ofisten bağlanan herkes tek IP bölmesini paylaştığı için sınır hızla dolardı.
+app.MapHub<PanelHub>("/hubs/panel").DisableRateLimiting();
 
 app.Run();
 return 0;

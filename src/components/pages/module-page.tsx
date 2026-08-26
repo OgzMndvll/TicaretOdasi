@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, CircleHelp, Clock3, CloudDownload, CloudUpload, Eye, ListFilter, Maximize2, MessageSquareText, Minimize2, Pencil, ShieldCheck, Store, Trash2, UserRound, UsersRound, XCircle } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { ActionModal, DuzenlemeIstegi } from "@/components/ui/action-modal";
+import { CanliRozet } from "@/components/ui/canli-rozet";
 import { BarList, DonutChart, DonutSegment } from "@/components/ui/charts";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { DetailModal, DetayGorusme, DetaySatiri } from "@/components/ui/detail-modal";
@@ -17,6 +18,7 @@ import {
   EsnafKaydi, GorusmeKaydi, GrupKaydi, KullaniciKaydi, OnayKaydi, Sayfali,
 } from "@/lib/api";
 import { kimlik, yoneticiMi } from "@/lib/auth";
+import { CanliOlay, useCanliVeri } from "@/lib/canli";
 
 /** Üyenin görüşme sonucundan gelen onay durumu. */
 const ESNAF_ONAY_DURUMLARI = ["Onay Verdi", "Onay Vermedi", "Kararsız", "Görüşülmedi"];
@@ -126,6 +128,14 @@ export function ModulePage({ kind }: { kind: PageKind }) {
   const [tamEkran, setTamEkran] = useState(false);
   const yenile = useCallback(() => setYenileme(n => n + 1), []);
 
+  // Canlı kanaldan gelen haberler ayrı bir sayaçla izlenir: "yenileme" referans listelerini de
+  // (gruplar, çalışanlar) yeniden çeker, oysa bir görüşme kaydında yalnızca liste ve özet değişir.
+  const [canliYenileme, setCanliYenileme] = useState(0);
+  const canliDurum = useCanliVeri(useCallback((olay: CanliOlay) => {
+    if (olay.tur === "grup" || olay.tur === "kullanici") yenile();
+    else setCanliYenileme(n => n + 1);
+  }, [yenile]));
+
   // Tam ekran liste, açık bir detay/form yokken Esc ile normal görünüme döner.
   useEffect(() => {
     if (!tamEkran) return;
@@ -183,7 +193,7 @@ export function ModulePage({ kind }: { kind: PageKind }) {
     }
     yukle();
     return () => { iptal = true; };
-  }, [kind, tab, sayfa, sayfaBoyutu, arama, filtreler, yenileme, page.tabs]);
+  }, [kind, tab, sayfa, sayfaBoyutu, arama, filtreler, yenileme, canliYenileme, page.tabs]);
 
   // İstatistikler + görevli performansı. Üye kartları listeyle aynı aktif süzgeçleri kullanır.
   useEffect(() => {
@@ -197,7 +207,7 @@ export function ModulePage({ kind }: { kind: PageKind }) {
       api.get<{ gorevliPerformans: { adSoyad: string; adet: number }[] }>("/api/gorusmeler/istatistik")
         .then(v => setPerformans(v.gorevliPerformans)).catch(() => {});
     return () => { iptal = true; };
-  }, [kind, apiYolu, yenileme]);
+  }, [kind, apiYolu, yenileme, canliYenileme]);
 
   const filtreTanimlari = useMemo<FiltreSecim[]>(() => {
     const yap = (label: string, anahtar: string, options: { deger: string; etiket: string }[], coklu = false): FiltreSecim => ({
@@ -305,33 +315,15 @@ export function ModulePage({ kind }: { kind: PageKind }) {
   function goster(kayit: unknown) {
     if (kind === "esnaflar") {
       const e = kayit as EsnafKaydi;
-      // Görüşme geçmişi dahil tam detayı API'den al
+      // Üye kartı bilinçli olarak sade tutulur: şirketin tam unvanı, yetkili kişi ve telefon.
+      // Kaydın geri kalan tüm alanları "Düzenle" ekranında görünür; burada asıl iş görüşme geçmişidir.
       api.get<EsnafKaydi & { gorusmeler: DetayGorusme[] }>(`/api/esnaflar/${e.id}`)
         .then(tam => setDetay({
           baslik: `${tam.isletme}`,
           satirlar: [
-            { etiket: "Üye Sicil No", deger: tam.uyeSicilNo }, { etiket: "Ticaret Sicil No", deger: tam.ticaretSicilNo },
-            { etiket: "Tabela Unvanı", deger: tam.tabelaUnvani }, { etiket: "Şirket Tipi", deger: tam.sirketTipi },
-            { etiket: "Uyruk", deger: tam.uyruk }, { etiket: "Sermaye", deger: tam.sermaye }, { etiket: "Derece", deger: tam.derece },
-            { etiket: "Meslek Grubu", deger: tam.grupNo ? `${tam.grupNo}. ${tam.grup}` : tam.grup },
-            { etiket: "Üyelik Durumu", deger: tam.uyelikDurumu, rozet: true },
-            { etiket: "Durum Değişim Tarihi", deger: tarihGoster(tam.durumDegisimTarihi) },
-            { etiket: "Durum Değişim Nedeni", deger: tam.durumDegisimNedeni },
-            { etiket: "Yetkili", deger: tam.adSoyad }, { etiket: "Yetkilinin Görevi", deger: tam.gorevi },
-            { etiket: "Diğer Yetkililer", deger: (tam.yetkililer ?? []).slice(1).map(y => y.gorevi ? `${y.adSoyad} (${y.gorevi})` : y.adSoyad).join(", ") || null },
-            { etiket: "Cep Telefonu", deger: tam.telefon }, { etiket: "İş Telefonu", deger: tam.isTelefonu },
-            { etiket: "Vergi Dairesi", deger: tam.vergiDairesi }, { etiket: "Vergi No", deger: tam.vergiNo },
-            { etiket: "Vergi Terk Tarihi", deger: tarihGoster(tam.vergiTerkTarihi) },
-            { etiket: "Kuruluş Tarihi", deger: tarihGoster(tam.kurulusTarihi) },
-            { etiket: "Üye Kayıt Tarihi", deger: tarihGoster(tam.kayitTarihi) },
-            { etiket: "Oda Karar Tarihi", deger: tarihGoster(tam.odaKararTarihi) },
-            { etiket: "NACE Kodu", deger: tam.naceKodu }, { etiket: "NACE Faaliyet Adı", deger: tam.naceAdi },
-            { etiket: "Faaliyet Detayı", deger: tam.faaliyetDetayi },
-            { etiket: "İl", deger: tam.il }, { etiket: "İlçe", deger: tam.ilce }, { etiket: "Mahalle", deger: tam.mahalle },
-            { etiket: "Adres", deger: tam.adres },
-            { etiket: "Görevli", deger: tam.gorevli },
-            { etiket: "Son Görüşme", deger: tarihGoster(tam.sonGorusmeTarihi) },
-            { etiket: "Onay Durumu", deger: tam.durum, rozet: true },
+            { etiket: "Şirket Unvanı", deger: tam.isletme },
+            { etiket: "Yetkili Kişi", deger: tam.adSoyad },
+            { etiket: "Telefon", deger: tam.telefon ?? tam.isTelefonu, tur: "telefon" },
           ],
           gorusmeler: tam.gorusmeler,
           esnaf: { id: tam.id, etiket: `${tam.adSoyad} — ${tam.isletme}` },
@@ -443,6 +435,18 @@ export function ModulePage({ kind }: { kind: PageKind }) {
   const filtreAktif = !!arama.trim() || Object.values(etkinFiltreler).some(Boolean);
   const seciliGrupSayisi = (etkinFiltreler.grupId ?? "").split(",").filter(Boolean).length;
   const filtreleriTemizle = () => { setArama(""); setFiltreler({}); setSayfa(1); setTab(0); };
+
+  // Şeritte seçili görünecek çip: tek bir onay durumu etkinse odur (sekmeden de gelse süzgeçten de).
+  const etkinDurumlar = (etkinFiltreler.durum ?? "").split(",").filter(Boolean);
+  const aktifDurum = etkinDurumlar.length === 1 ? etkinDurumlar[0] : "";
+  /** Şeritten durum seçimi. Sekme ile çoklu süzgeç çakışmasın diye "durum" süzgeci temizlenip sekme değiştirilir. */
+  const durumSec = (durum: string) => {
+    setSayfa(1);
+    setFiltreler(f => { const kalan = { ...f }; delete kalan.durum; return kalan; });
+    const hedef = durum ? page.tabs.findIndex(t => t.filtre.durum === durum) : 0;
+    setTab(hedef >= 0 ? hedef : 0);
+  };
+
   const tamEkraniAc = () => {
     setTamEkran(true);
     // Geniş çalışma alanında daha çok satır göster; API'nin güvenli üst sınırı 100'dür.
@@ -457,12 +461,15 @@ export function ModulePage({ kind }: { kind: PageKind }) {
           <div><small>TAM EKRAN ÇALIŞMA ALANI</small><h1>Üye Listesi</h1></div>
         </div>
         <div className="fullscreen-list-actions">
+          <CanliRozet durum={canliDurum} />
           <span className="fullscreen-record-count"><b>{sayiGoster(toplam)}</b> filtrelenmiş kayıt</span>
           <button className="fullscreen-close-button" onClick={() => setTamEkran(false)}>
             <Minimize2 size={17} /> Normal Görünüme Dön <kbd>Esc</kbd>
           </button>
         </div>
       </header>
+
+      <DurumSeridi ist={istatistik} aktifDurum={aktifDurum} listelenen={toplam} onSec={durumSec} />
 
       <div className="fullscreen-compact-filter">
         <FilterBar
@@ -506,6 +513,7 @@ export function ModulePage({ kind }: { kind: PageKind }) {
         <div className="tabs">{page.tabs.map((t, i) =>
           <button className={i === tab ? "active" : ""} key={t.etiket} onClick={() => { setTab(i); setSayfa(1); }}>{t.etiket}</button>)}
         </div>
+        <CanliRozet durum={canliDurum} />
         {kind === "esnaflar" && <button className="open-fullscreen-button" onClick={tamEkraniAc} title="Listeyi tam ekran çalışma alanında aç">
           <Maximize2 size={16} /> Tam Ekranda Aç
         </button>}
@@ -664,15 +672,56 @@ function Stats({ kind, ist, filtreAktif = false, seciliGrupSayisi = 0 }: {
   const kapsamDetayi = seciliGrupSayisi > 0
     ? (seciliGrupSayisi === 1 ? "Seçili meslek grubunun toplamı" : `${seciliGrupSayisi} seçili grubun toplamı`)
     : "Aktif filtrelerin sonucu";
+  // Durum kartlarının paydası, onay durumu süzgeci hariç aktif süzgeçlerin kapsamıdır:
+  // "Onay Veren" sekmesindeyken yüzdeler %100'e sıçramaz, diğer kartlar sıfırlanmaz.
+  const payda = ist.kapsamToplam || ist.toplam;
   return <div className={`stats-grid ${ekKapsamKarti ? "six" : "five"}`}>
     <StatCard icon={UsersRound} label="Toplam Üye" value={sayiGoster(ist.genelToplam ?? ist.toplam)} detail="Tüm üyeler" />
     {ekKapsamKarti && <StatCard icon={Store} label={kapsamEtiketi} value={sayiGoster(kapsamDegeri)}
       detail={kapsamDetayi}
       tone="purple" />}
-    <StatCard icon={CheckCircle2} label="Onay Veren" value={sayiGoster(ist.onayVeren)} detail={yuzde(ist.onayVeren, ist.toplam)} tone="green" />
-    <StatCard icon={XCircle} label="Onay Vermeyen" value={sayiGoster(ist.onayVermeyen)} detail={yuzde(ist.onayVermeyen, ist.toplam)} tone="red" />
-    <StatCard icon={CircleHelp} label="Kararsız" value={sayiGoster(ist.kararsiz)} detail={yuzde(ist.kararsiz, ist.toplam)} tone="orange" />
-    <StatCard icon={Clock3} label="Görüşülmemiş" value={sayiGoster(ist.gorusulmemis)} detail={yuzde(ist.gorusulmemis, ist.toplam)} tone="gray" />
+    <StatCard icon={CheckCircle2} label="Onay Veren" value={sayiGoster(ist.onayVeren)} detail={yuzde(ist.onayVeren, payda)} tone="green" />
+    <StatCard icon={XCircle} label="Onay Vermeyen" value={sayiGoster(ist.onayVermeyen)} detail={yuzde(ist.onayVermeyen, payda)} tone="red" />
+    <StatCard icon={CircleHelp} label="Kararsız" value={sayiGoster(ist.kararsiz)} detail={yuzde(ist.kararsiz, payda)} tone="orange" />
+    <StatCard icon={Clock3} label="Görüşülmemiş" value={sayiGoster(ist.gorusulmemis)} detail={yuzde(ist.gorusulmemis, payda)} tone="gray" />
+  </div>;
+}
+
+/**
+ * Tam ekran çalışma alanının üst şeridi. Her çip hem sayıyı gösterir hem de o onay durumunu
+ * süzer; sayılar onay durumu süzgecinden bağımsız hesaplandığı için çipe basınca diğerleri
+ * sıfırlanmaz (grup/ilçe gibi süzgeçler ise sayılara yansır).
+ */
+const DURUM_CIPLERI = [
+  { etiket: "Onay Veren", anahtar: "onayVeren", durum: "Onay Verdi", ikon: CheckCircle2, ton: "green" },
+  { etiket: "Onay Vermeyen", anahtar: "onayVermeyen", durum: "Onay Vermedi", ikon: XCircle, ton: "red" },
+  { etiket: "Kararsız", anahtar: "kararsiz", durum: "Kararsız", ikon: CircleHelp, ton: "orange" },
+  { etiket: "Görüşülmemiş", anahtar: "gorusulmemis", durum: "Görüşülmedi", ikon: Clock3, ton: "gray" },
+] as const;
+
+function DurumSeridi({ ist, aktifDurum, listelenen, onSec }: {
+  ist: Istatistik | null; aktifDurum: string; listelenen: number; onSec: (durum: string) => void;
+}) {
+  const payda = ist ? (ist.kapsamToplam || ist.toplam) : 0;
+  return <div className="durum-seridi">
+    <div className="serit-kapsam">
+      <small>Listelenen</small>
+      <b>{ist ? sayiGoster(listelenen) : "…"}</b>
+      <span>üye</span>
+    </div>
+    {DURUM_CIPLERI.map(c => {
+      const deger = ist?.[c.anahtar] ?? 0;
+      const secili = aktifDurum === c.durum;
+      return <button key={c.durum} type="button"
+        className={`serit-cip ton-${c.ton}${secili ? " secili" : ""}`}
+        aria-pressed={secili}
+        title={secili ? `${c.etiket} süzgecini kaldır` : `Yalnızca "${c.etiket}" üyeleri göster`}
+        onClick={() => onSec(secili ? "" : c.durum)}>
+        <span className="cip-ikon"><c.ikon size={17} /></span>
+        <span className="cip-metin"><small>{c.etiket}</small><b>{ist ? sayiGoster(deger) : "…"}</b></span>
+        <em>{ist ? yuzde(deger, payda) : ""}</em>
+      </button>;
+    })}
   </div>;
 }
 

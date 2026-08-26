@@ -6,7 +6,7 @@ export function StatCard({ icon: Icon, label, value, detail, detailTitle, tone =
   detailTitle?: string;
   tone?: string; trend?: string;
 }) {
-  return <article className="stat-card">
+  return <article className={`stat-card ton-${tone}`}>
     <span className={`stat-icon ${tone}`}><Icon size={27} /></span>
     <div className="stat-content">
       <b title={label}>{label}</b>

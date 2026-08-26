@@ -1,10 +1,14 @@
 "use client";
 
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Phone, Plus, Trash2 } from "lucide-react";
 import { Modal } from "./modal";
 import { durumTonu, tarihGoster } from "@/lib/api";
 
-export interface DetaySatiri { etiket: string; deger: string | null | undefined; rozet?: boolean }
+export interface DetaySatiri {
+  etiket: string; deger: string | null | undefined; rozet?: boolean;
+  /** "telefon": değer aranabilir bağlantı olarak gösterilir. */
+  tur?: "telefon";
+}
 export interface DetayGorusme {
   id: number; sira: number; tarih: string; sonuc: string; not?: string | null;
   takipGerekli?: boolean; gorevliId?: number | null; gorevli?: string | null;
@@ -23,12 +27,17 @@ export function DetailModal({ open, baslik, satirlar, gorusmeler, onClose, onGor
 }) {
   return <Modal open={open} title={baslik} onClose={onClose} genis={!!gorusmeler} ustBaslik="Üye kartı">
     <div className="action-form">
-      <div className="form-grid">
+      {/* Üç alanlık üye özeti tek satırda ve vurgulu; daha kalabalık kartlar iki sütunda kalır. */}
+      <div className={satirlar.length <= 3 ? "form-grid ozet-grid" : "form-grid"}>
         {satirlar.map(s => <div key={s.etiket} className="form-field">
           <span>{s.etiket}</span>
           {s.rozet
             ? <div><span className={`badge ${durumTonu(s.deger ?? "")}`}>{s.deger ?? "-"}</span></div>
-            : <strong style={{ fontSize: 14 }}>{s.deger || "-"}</strong>}
+            : s.tur === "telefon" && s.deger
+              ? <a className="ozet-telefon" href={`tel:${s.deger.replace(/[^\d+]/g, "")}`}>
+                  <Phone size={14} />{s.deger}
+                </a>
+              : <strong className="detay-deger">{s.deger || "-"}</strong>}
         </div>)}
       </div>
       {gorusmeler && <section className="gorusme-bolumu">

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, CircleHelp, CloudDownload, MessageSquareText, Store, XCircle } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { BarList, DonutChart, LineChart } from "@/components/ui/charts";
 import { StatCard } from "@/components/ui/stat-card";
 import { Toast } from "@/components/ui/toast";
 import { api, API_ERISIM_HATASI, DashboardOzet, GrupRaporSatiri, sayiGoster, yuzde } from "@/lib/api";
+import { useCanliYenileme } from "@/lib/canli";
 
 export function ReportsPage() {
   const [ozet, setOzet] = useState<DashboardOzet | null>(null);
@@ -14,11 +15,15 @@ export function ReportsPage() {
   const [hata, setHata] = useState("");
   const [toast, setToast] = useState("");
 
-  useEffect(() => {
+  const yukle = useCallback(() => {
     api.get<DashboardOzet>("/api/dashboard").then(setOzet)
       .catch(() => setHata(API_ERISIM_HATASI));
     api.get<GrupRaporSatiri[]>("/api/raporlar/gruplar").then(setRapor).catch(() => {});
   }, []);
+
+  useEffect(() => { yukle(); }, [yukle]);
+  // Yeni görüşme kaydedildiğinde rapor sayıları kendiliğinden güncellenir.
+  useCanliYenileme(yukle);
 
   const toplamGorusme = ozet?.aralikGorusme ?? 0;
 

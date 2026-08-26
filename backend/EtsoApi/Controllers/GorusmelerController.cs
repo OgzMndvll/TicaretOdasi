@@ -1,5 +1,6 @@
 using EtsoApi.Data;
 using EtsoApi.Models;
+using EtsoApi.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,7 +8,7 @@ namespace EtsoApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class GorusmelerController(EtsoDbContext db) : ControllerBase
+public class GorusmelerController(EtsoDbContext db, CanliBildirim canli) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> Listele(
@@ -135,6 +136,8 @@ public class GorusmelerController(EtsoDbContext db) : ControllerBase
         }
 
         await db.SaveChangesAsync();
+        // Kayıt değişti: bağlı paneller listeyi kendiliğinden tazeler (bkz. Services/CanliBildirim.cs).
+        await canli.DegistiAsync("gorusme", gorusme.Id);
         return CreatedAtAction(nameof(Listele), new { esnafId = gorusme.EsnafId }, new { gorusme.Id });
     }
 
@@ -162,6 +165,7 @@ public class GorusmelerController(EtsoDbContext db) : ControllerBase
         gorusme.TakipGerekli = dto.TakipGerekli;
         await db.SaveChangesAsync();
         await EsnafDurumunuEsitle(gorusme.EsnafId);
+        await canli.DegistiAsync("gorusme", gorusme.Id);
         return NoContent();
     }
 
@@ -175,6 +179,7 @@ public class GorusmelerController(EtsoDbContext db) : ControllerBase
         db.Gorusmeler.Remove(gorusme);
         await db.SaveChangesAsync();
         await EsnafDurumunuEsitle(esnafId);
+        await canli.DegistiAsync("gorusme", id);
         return NoContent();
     }
 

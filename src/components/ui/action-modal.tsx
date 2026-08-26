@@ -20,14 +20,12 @@ type Alan = {
 const TELEFON_UZUNLUK = 11;
 const telefonTemizle = (deger: string) => deger.replace(/\D/g, "").slice(0, TELEFON_UZUNLUK);
 
-/** Yeni kullanıcı oluşturulduğunda yöneticiye bir kez gösterilecek giriş bilgileri. */
-type KimlikBilgisi = { kullaniciAdi: string; sifre: string };
-
 const ESNAF_DURUMLARI = ["Onay Verdi", "Onay Vermedi", "Kararsız", "Görüşülmedi"];
 // Odadaki üyelik durumu (kaynak raporun "DURUM TANIMI" kolonu). Görüşme onay durumundan ayrıdır.
 const UYELIK_DURUMLARI = ["Faal", "Askı", "Pasif"];
 
-type FormTanimi = { alanlar: Alan[]; buton: string; gonder: (v: Record<string, string>) => Promise<KimlikBilgisi | void> };
+/** `gonder`, isteğe bağlı olarak kendi başarı mesajını döndürebilir (ör. sunucunun türettiği kullanıcı adı). */
+type FormTanimi = { alanlar: Alan[]; buton: string; gonder: (v: Record<string, string>) => Promise<string | void> };
 type DuzenlemeTanimi = { alanlar: Alan[]; buton: string; gonder: (id: number, v: Record<string, string>) => Promise<void> };
 
 // Alan düzeni odanın "ÜYE LİSTE DETAY RAPORU" kolonlarını izler.
@@ -95,7 +93,7 @@ export const formlar: Record<string, FormTanimi> = {
   "Yeni Üye Ekle": {
     alanlar: esnafAlanlari,
     buton: "Üye Kaydını Oluştur",
-    gonder: v => api.post("/api/esnaflar", esnafGovdesi(v)),
+    gonder: async v => { await api.post("/api/esnaflar", esnafGovdesi(v)); },
   },
   "Yeni Görüşme": {
     alanlar: [
@@ -104,15 +102,19 @@ export const formlar: Record<string, FormTanimi> = {
       { name: "gorevliId", label: "Görüşen Aktif Çalışan", tip: "select", secenekKaynagi: "gorevliler", zorunlu: true },
       { name: "tarih", label: "Görüşme Tarihi", tip: "date", zorunlu: true },
       { name: "sonuc", label: "Görüşme Sonucu", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Onay Verdi", "Onay Vermedi", "Kararsız"], zorunlu: true },
-      { name: "takipGerekli", label: "Takip Gerekli mi?", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Hayır", "Evet"] },
       { name: "not", label: "Not / Yorum", tip: "textarea" },
     ],
     buton: "Görüşmeyi Kaydet",
-    gonder: v => api.post("/api/gorusmeler", {
-      esnafId: Number(v.esnafId), gorevliId: v.gorevliId ? Number(v.gorevliId) : 0,
-      tarih: v.tarih, sonuc: v.sonuc, not: v.not || null, takipGerekli: v.takipGerekli === "Evet",
-      sira: v.sira ? Number(v.sira) : null,
-    }),
+    gonder: async v => {
+      await api.post("/api/gorusmeler", {
+        esnafId: Number(v.esnafId), gorevliId: v.gorevliId ? Number(v.gorevliId) : 0,
+        tarih: v.tarih, sonuc: v.sonuc, not: v.not || null,
+        // "Takip gerekli" alanı yeni görüşme formundan kaldırıldı; sunucudaki alan bool
+        // olduğu için açıkça false gönderilir (düzenleme ekranından hâlâ değiştirilebilir).
+        takipGerekli: false,
+        sira: v.sira ? Number(v.sira) : null,
+      });
+    },
   },
   "Yeni Grup Ekle": {
     alanlar: [
@@ -123,21 +125,23 @@ export const formlar: Record<string, FormTanimi> = {
       { name: "aciklama", label: "Açıklama", tip: "textarea" },
     ],
     buton: "Grubu Oluştur",
-    gonder: v => api.post("/api/gruplar", {
-      no: v.no ? Number(v.no) : null,
-      ad: v.ad, tur: v.tur, ustGrupId: v.ustGrupId ? Number(v.ustGrupId) : null, aciklama: v.aciklama || null,
-    }),
+    gonder: async v => {
+      await api.post("/api/gruplar", {
+        no: v.no ? Number(v.no) : null,
+        ad: v.ad, tur: v.tur, ustGrupId: v.ustGrupId ? Number(v.ustGrupId) : null, aciklama: v.aciklama || null,
+      });
+    },
   },
   "Yeni Çalışan Ekle": {
     // Şifre yalnızca panele girecek Yönetici hesapları için gereklidir; çalışan kaydı şifresiz açılır
     // ve giriş yapamaz, yalnızca görüşmelerde seçilir.
     alanlar: [...kullaniciAlanlari, { name: "sifre", label: "Geçici Şifre (yalnızca Yönetici için; en az 10 karakter, büyük/küçük harf ve rakam)", tip: "password" }],
     buton: "Çalışanı Kaydet",
-    // Kullanıcı adını sunucu Ad Soyad'dan türetebildiği için oluşan kaydı geri okuyup
-    // giriş bilgilerini yöneticiye gösteriyoruz; şifre bir daha hiçbir yerden okunamaz.
+    // Kullanıcı adını sunucu Ad Soyad'dan türetir; yöneticinin bilemeyeceği tek bilgi budur ve
+    // başarı bildiriminde gösterilir. Şifreyi yönetici zaten kendisi yazdığı için tekrar gösterilmez.
     gonder: async v => {
       const olusan = await api.post<{ id: number; kullaniciAdi: string }>("/api/kullanicilar", kullaniciGovdesi(v));
-      return { kullaniciAdi: olusan.kullaniciAdi, sifre: v.sifre };
+      return `Çalışan kaydedildi. Kullanıcı adı: ${olusan.kullaniciAdi}`;
     },
   },
 };
@@ -204,8 +208,6 @@ export function ActionModal({ action, duzenleme, open, onClose, onSuccess, onSav
   const [hata, setHata] = useState("");
   const [gruplar, setGruplar] = useState<GrupKaydi[]>([]);
   const [gorevliler, setGorevliler] = useState<KullaniciKaydi[]>([]);
-  const [kimlik, setKimlik] = useState<KimlikBilgisi | null>(null);
-  const [kopyalandi, setKopyalandi] = useState(false);
   // İlçe listesi seçili ile bağlıdır; il değişince ilçe seçimi sıfırlanır.
   const [secilenIl, setSecilenIl] = useState("");
   // Görüşme sırası seçilen üyenin mevcut görüşme sayısına bağlıdır; üye seçilince yeniden hesaplanır.
@@ -219,8 +221,6 @@ export function ActionModal({ action, duzenleme, open, onClose, onSuccess, onSav
   useEffect(() => {
     if (!open || !form) return;
     setHata("");
-    setKimlik(null);
-    setKopyalandi(false);
     // Düzenlemede kayıtlı il ile açılır; yeni kayıtta boş başlar.
     setSecilenIl(duzenleme?.degerler.il ?? "");
     setSecilenEsnafId(duzenleme?.degerler.esnafId ?? onDoldurma?.esnafId ?? "");
@@ -279,20 +279,17 @@ export function ActionModal({ action, duzenleme, open, onClose, onSuccess, onSav
     setBusy(true);
     setHata("");
     try {
+      let mesaj: string;
       if (duzenleme) {
         await (form as DuzenlemeTanimi).gonder(duzenleme.id, veri);
+        mesaj = "Kayıt güncellendi.";
       } else {
-        const sonuc = await (form as FormTanimi).gonder(veri);
-        // Giriş bilgisi dönen formlarda (yeni kullanıcı) modal açık kalır; yönetici
-        // bilgileri not edip kapattığında normal başarı akışı işler.
-        if (sonuc) {
-          setKimlik(sonuc);
-          onSaved?.();
-          return;
-        }
+        // Form kendi mesajını verebilir; vermezse genel metin kullanılır. Sunucu 201 gövdesi
+        // döndürse bile burada hiçbir ek ekran açılmaz.
+        mesaj = await (form as FormTanimi).gonder(veri) || `${action} işlemi başarıyla kaydedildi.`;
       }
       onClose();
-      onSuccess(duzenleme ? "Kayıt güncellendi." : `${action} işlemi başarıyla kaydedildi.`);
+      onSuccess(mesaj);
       onSaved?.();
     } catch (e) {
       setHata(e instanceof ApiError ? e.message : "Sunucuya ulaşılamadı. API'nin çalıştığından emin olun.");
@@ -300,42 +297,6 @@ export function ActionModal({ action, duzenleme, open, onClose, onSuccess, onSav
       setBusy(false);
     }
   }
-
-  function kimlikKapat() {
-    setKimlik(null);
-    setKopyalandi(false);
-    onClose();
-    onSuccess("Kullanıcı oluşturuldu. Giriş bilgilerini kullanıcıya iletin.");
-  }
-
-  async function kimlikKopyala() {
-    if (!kimlik) return;
-    try {
-      await navigator.clipboard.writeText(`Kullanıcı adı: ${kimlik.kullaniciAdi}\nŞifre: ${kimlik.sifre}`);
-      setKopyalandi(true);
-    } catch {
-      setKopyalandi(false);
-    }
-  }
-
-  if (kimlik) return <Modal open={open} title="Kullanıcı Oluşturuldu" onClose={kimlikKapat}>
-    <div className="action-form">
-      <p className="security-note">
-        Aşağıdaki giriş bilgilerini kullanıcıya iletin. <strong>Şifre bu ekrandan sonra bir daha görüntülenemez</strong> —
-        kaybolursa yönetici olarak yeni bir şifre atamanız gerekir.
-      </p>
-      <dl className="kimlik-kutusu">
-        <dt>Kullanıcı adı</dt><dd><code>{kimlik.kullaniciAdi}</code></dd>
-        <dt>Geçici şifre</dt><dd><code>{kimlik.sifre}</code></dd>
-      </dl>
-      <footer>
-        <button type="button" className="secondary-button" onClick={kimlikKopyala}>
-          {kopyalandi ? "Kopyalandı" : "Bilgileri Kopyala"}
-        </button>
-        <button type="button" className="primary-button" onClick={kimlikKapat}><CheckCircle2 size={17} />Not Aldım, Kapat</button>
-      </footer>
-    </div>
-  </Modal>;
 
   // Panele yalnızca yönetici girdiği için görüşmeyi kimin yaptığı her zaman elle seçilir.
   const kisitli = false;

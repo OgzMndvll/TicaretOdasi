@@ -8,7 +8,7 @@ namespace EtsoApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class KullanicilarController(EtsoDbContext db) : ControllerBase
+public class KullanicilarController(EtsoDbContext db, CanliBildirim canli) : ControllerBase
 {
     private static readonly string[] GecerliRoller = ["Yönetici", "Görevli"];
     private static readonly string[] GecerliDurumlar = ["Aktif", "Pasif"];
@@ -94,6 +94,8 @@ public class KullanicilarController(EtsoDbContext db) : ControllerBase
                 : dto.Sifre);
         db.Kullanicilar.Add(kullanici);
         await db.SaveChangesAsync();
+        // Kayıt değişti: bağlı paneller listeyi kendiliğinden tazeler (bkz. Services/CanliBildirim.cs).
+        await canli.DegistiAsync("kullanici", kullanici.Id);
         return CreatedAtAction(nameof(Getir), new { id = kullanici.Id }, new { kullanici.Id, kullanici.KullaniciAdi });
     }
 
@@ -153,6 +155,7 @@ public class KullanicilarController(EtsoDbContext db) : ControllerBase
         kullanici.Telefon = dto.Telefon;
         if (!string.IsNullOrWhiteSpace(dto.Durum)) kullanici.Durum = dto.Durum;
         await db.SaveChangesAsync();
+        await canli.DegistiAsync("kullanici", kullanici.Id);
         return NoContent();
     }
 
@@ -170,6 +173,7 @@ public class KullanicilarController(EtsoDbContext db) : ControllerBase
             return Conflict(new { mesaj = "Bu kullanıcının görüşme/görevlendirme kayıtları var; silmek yerine pasife alın." });
         db.Kullanicilar.Remove(kullanici);
         await db.SaveChangesAsync();
+        await canli.DegistiAsync("kullanici", id);
         return NoContent();
     }
 
@@ -275,6 +279,7 @@ public class KullanicilarController(EtsoDbContext db) : ControllerBase
         }
 
         await db.SaveChangesAsync();
+        await canli.DegistiAsync("kullanici");
         return Ok(new IceAktarmaSonucu(eklenen, atlanan, hatalar));
     }
 

@@ -10,6 +10,11 @@ const apiKaynagi = (() => {
   }
 })();
 
+// SignalR canlı kanalı aynı API kaynağına ws/wss şemasıyla bağlanır. CSP3'te "https://x"
+// ifadesi "wss://x" ile de eşleşir; yine de tarayıcı farklılıklarına yer bırakmamak için
+// soket kaynağı connect-src listesine açıkça yazılır.
+const apiSoketKaynagi = apiKaynagi.replace(/^http/, "ws");
+
 const gelistirme = process.env.NODE_ENV !== "production";
 
 // Panel, oturum jetonunu tarayıcı deposunda tuttuğu için sayfanın kendisi de korunmalı:
@@ -25,7 +30,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
-  `connect-src 'self' ${apiKaynagi}${gelistirme ? " ws: wss:" : ""}`,
+  `connect-src 'self' ${apiKaynagi} ${apiSoketKaynagi}${gelistirme ? " ws: wss:" : ""}`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

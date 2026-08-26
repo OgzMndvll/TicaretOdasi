@@ -9,6 +9,8 @@ import { FilterBar, FiltreSecim } from "@/components/ui/filter-bar";
 import { StatCard } from "@/components/ui/stat-card";
 import { Toast } from "@/components/ui/toast";
 import { api, API_ERISIM_HATASI, DashboardOzet, GrupKaydi, durumTonu, sayiGoster, tarihGoster, yuzde } from "@/lib/api";
+import { CanliRozet } from "@/components/ui/canli-rozet";
+import { useCanliYenileme } from "@/lib/canli";
 
 /** Bugünden n gün önceki tarihi date girdisinin beklediği "yyyy-aa-gg" biçiminde verir. */
 function gunOnce(n: number): string {
@@ -55,6 +57,9 @@ export function DashboardPage() {
   }, [grupId, baslangic, bitis]);
 
   useEffect(() => { yukle(); }, [yukle]);
+
+  // Başka bir kullanıcı görüşme girdiğinde özet ve grafikler kendiliğinden tazelenir.
+  const canliDurum = useCanliYenileme(yukle);
 
   const filtreler = useMemo<FiltreSecim[]>(() => [
     {
@@ -125,7 +130,7 @@ export function DashboardPage() {
       </section>
     </div>
     <div className="content-with-aside dashboard-bottom">
-      <section className="panel table-panel"><h2>Son Görüşmeler</h2><div className="table-scroll"><table>
+      <section className="panel table-panel"><h2 className="baslik-satiri">Son Görüşmeler <CanliRozet durum={canliDurum} /></h2><div className="table-scroll"><table>
         <thead><tr><th>Görüşme</th><th>Üye Adı</th><th>İş Yeri / Unvan</th><th>Meslek Grubu</th><th>Çalışan</th><th>Tarih</th><th>Sonuç</th></tr></thead>
         <tbody>{!(ozet?.sonGorusmeler ?? []).length
           ? <tr><td colSpan={7} style={{ textAlign: "center", padding: "28px 0", color: "#7a8699" }}>Seçili aralıkta görüşme yok.</td></tr>

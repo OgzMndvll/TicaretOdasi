@@ -1,5 +1,6 @@
 using EtsoApi.Data;
 using EtsoApi.Models;
+using EtsoApi.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,7 +8,7 @@ namespace EtsoApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class GruplarController(EtsoDbContext db) : ControllerBase
+public class GruplarController(EtsoDbContext db, CanliBildirim canli) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> Listele([FromQuery] string? durum, [FromQuery] string? tur)
@@ -70,6 +71,8 @@ public class GruplarController(EtsoDbContext db) : ControllerBase
         };
         db.Gruplar.Add(grup);
         await db.SaveChangesAsync();
+        // Kayıt değişti: bağlı paneller listeyi kendiliğinden tazeler (bkz. Services/CanliBildirim.cs).
+        await canli.DegistiAsync("grup", grup.Id);
         return CreatedAtAction(nameof(Getir), new { id = grup.Id }, new { grup.Id });
     }
 
@@ -90,6 +93,7 @@ public class GruplarController(EtsoDbContext db) : ControllerBase
         if (!string.IsNullOrWhiteSpace(dto.Durum)) grup.Durum = dto.Durum;
         grup.GuncellemeTarihi = DateTime.UtcNow;
         await db.SaveChangesAsync();
+        await canli.DegistiAsync("grup", grup.Id);
         return NoContent();
     }
 
@@ -103,6 +107,7 @@ public class GruplarController(EtsoDbContext db) : ControllerBase
             return Conflict(new { mesaj = "Bu gruba kayıtlı üyeler var; önce üyeleri başka gruba taşıyın." });
         db.Gruplar.Remove(grup);
         await db.SaveChangesAsync();
+        await canli.DegistiAsync("grup", id);
         return NoContent();
     }
 }
