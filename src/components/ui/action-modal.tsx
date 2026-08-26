@@ -100,6 +100,7 @@ export const formlar: Record<string, FormTanimi> = {
       { name: "esnafId", label: "Üye", tip: "select", secenekKaynagi: "esnaflar", zorunlu: true },
       { name: "sira", label: "Kaçıncı Görüşme", tip: "select", secenekKaynagi: "gorusmeSirasi", zorunlu: true },
       { name: "gorevliId", label: "Görüşen Aktif Çalışan", tip: "select", secenekKaynagi: "gorevliler", zorunlu: true },
+      { name: "ikinciGorevliId", label: "Görüşecek Kişi (isteğe bağlı ikinci çalışan)", tip: "select", secenekKaynagi: "gorevliler" },
       { name: "tarih", label: "Görüşme Tarihi", tip: "date", zorunlu: true },
       { name: "sonuc", label: "Görüşme Sonucu", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Onay Verdi", "Onay Vermedi", "Kararsız"], zorunlu: true },
       { name: "not", label: "Not / Yorum", tip: "textarea" },
@@ -108,6 +109,7 @@ export const formlar: Record<string, FormTanimi> = {
     gonder: async v => {
       await api.post("/api/gorusmeler", {
         esnafId: Number(v.esnafId), gorevliId: v.gorevliId ? Number(v.gorevliId) : 0,
+        ikinciGorevliId: v.ikinciGorevliId ? Number(v.ikinciGorevliId) : null,
         tarih: v.tarih, sonuc: v.sonuc, not: v.not || null,
         // "Takip gerekli" alanı yeni görüşme formundan kaldırıldı; sunucudaki alan bool
         // olduğu için açıkça false gönderilir (düzenleme ekranından hâlâ değiştirilebilir).
@@ -181,6 +183,7 @@ export const duzenlemeFormlari: Record<string, DuzenlemeTanimi> = {
     alanlar: [
       { name: "sira", label: "Kaçıncı Görüşme", tip: "select", secenekKaynagi: "gorusmeSirasi", zorunlu: true },
       { name: "gorevliId", label: "Görüşen Aktif Çalışan", tip: "select", secenekKaynagi: "gorevliler", zorunlu: true },
+      { name: "ikinciGorevliId", label: "Görüşecek Kişi (isteğe bağlı ikinci çalışan)", tip: "select", secenekKaynagi: "gorevliler" },
       { name: "tarih", label: "Görüşme Tarihi", tip: "date", zorunlu: true },
       { name: "sonuc", label: "Görüşme Sonucu", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Onay Verdi", "Onay Vermedi", "Kararsız"], zorunlu: true },
       { name: "takipGerekli", label: "Takip Gerekli mi?", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Hayır", "Evet"], zorunlu: true },
@@ -190,6 +193,7 @@ export const duzenlemeFormlari: Record<string, DuzenlemeTanimi> = {
     buton: "Değişiklikleri Kaydet",
     gonder: (id, v) => api.put(`/api/gorusmeler/${id}`, {
       esnafId: Number(v.esnafId), gorevliId: v.gorevliId ? Number(v.gorevliId) : 0,
+      ikinciGorevliId: v.ikinciGorevliId ? Number(v.ikinciGorevliId) : null,
       tarih: v.tarih, sonuc: v.sonuc, not: v.not || null, takipGerekli: v.takipGerekli === "Evet",
       sira: v.sira ? Number(v.sira) : null,
     }),
@@ -251,7 +255,15 @@ export function ActionModal({ action, duzenleme, open, onClose, onSuccess, onSav
   function secenekler(alan: Alan): { deger: string; etiket: string }[] {
     switch (alan.secenekKaynagi) {
       case "gruplar": return gruplar.map(g => ({ deger: String(g.id), etiket: g.no ? `${g.no}. ${g.ad}` : g.ad }));
-      case "gorevliler": return gorevliler.map(k => ({ deger: String(k.id), etiket: k.adSoyad }));
+      case "gorevliler": {
+        const liste = gorevliler.map(k => ({ deger: String(k.id), etiket: k.adSoyad }));
+        // Liste yalnızca aktif çalışanları getirir. Kayıttaki kişi pasife alınmışsa seçenek
+        // arasında olmaz, select boşa düşer ve kaydetmek alanı silerdi.
+        const mevcut = degerler[alan.name];
+        if (mevcut && !liste.some(s => s.deger === mevcut))
+          liste.unshift({ deger: mevcut, etiket: degerler[`${alan.name}Etiket`] || `Pasif çalışan (#${mevcut})` });
+        return liste;
+      }
       case "iller": return ILLER.map(i => ({ deger: i, etiket: i }));
       case "ilceler": return ilceleriGetir(secilenIl).map(i => ({ deger: i, etiket: i }));
       case "gorusmeSirasi": {

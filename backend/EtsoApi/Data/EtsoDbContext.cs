@@ -89,6 +89,8 @@ public class EtsoDbContext(DbContextOptions<EtsoDbContext> options) : DbContext(
             e.HasIndex(x => x.Tarih);
             e.HasOne(x => x.Esnaf).WithMany(m => m.Gorusmeler).HasForeignKey(x => x.EsnafId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Gorevli).WithMany().HasForeignKey(x => x.GorevliId).OnDelete(DeleteBehavior.Restrict);
+            // İkinci çalışan isteğe bağlı: kayıt silinirse görüşme silinmez, alan boşalır.
+            e.HasOne(x => x.IkinciGorevli).WithMany().HasForeignKey(x => x.IkinciGorevliId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Gorevlendirme>(e =>

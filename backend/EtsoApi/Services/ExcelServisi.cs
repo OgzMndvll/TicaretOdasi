@@ -8,10 +8,23 @@ public static class ExcelServisi
 {
     public const string IcerikTipi = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-    /// <summary>Başlık satırı + satır verilerinden xlsx üretir.</summary>
-    public static byte[] Olustur(string sayfaAdi, string[] basliklar, IEnumerable<object?[]> satirlar)
+    /// <summary>Tek sayfalık xlsx (bkz. <see cref="OlusturCok"/>).</summary>
+    public static byte[] Olustur(string sayfaAdi, string[] basliklar, IEnumerable<object?[]> satirlar) =>
+        OlusturCok((sayfaAdi, basliklar, satirlar));
+
+    /// <summary>Her biri başlık satırı + verilerden oluşan birden çok sayfalı xlsx üretir.</summary>
+    public static byte[] OlusturCok(params (string SayfaAdi, string[] Basliklar, IEnumerable<object?[]> Satirlar)[] sayfalar)
     {
         using var kitap = new XLWorkbook();
+        foreach (var (sayfaAdi, basliklar, satirlar) in sayfalar)
+            SayfaYaz(kitap, sayfaAdi, basliklar, satirlar);
+        using var akis = new MemoryStream();
+        kitap.SaveAs(akis);
+        return akis.ToArray();
+    }
+
+    private static void SayfaYaz(XLWorkbook kitap, string sayfaAdi, string[] basliklar, IEnumerable<object?[]> satirlar)
+    {
         var sayfa = kitap.Worksheets.Add(sayfaAdi);
         for (var i = 0; i < basliklar.Length; i++)
         {
@@ -34,10 +47,8 @@ public static class ExcelServisi
             }
             satirNo++;
         }
+        sayfa.SheetView.FreezeRows(1);
         sayfa.Columns().AdjustToContents(1, Math.Min(satirNo, 50));
-        using var akis = new MemoryStream();
-        kitap.SaveAs(akis);
-        return akis.ToArray();
     }
 
     /// <summary>

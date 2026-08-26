@@ -7,6 +7,13 @@ public class Gorusme
     public Esnaf? Esnaf { get; set; }
     public int GorevliId { get; set; }
     public Kullanici? Gorevli { get; set; }
+
+    /// <summary>Görüşmeye eşlik eden ikinci çalışan ("Görüşecek Kişi"). İsteğe bağlıdır.
+    /// Raporlarda görüşme yalnızca birincil <see cref="GorevliId"/> hanesine sayılır; bu alan
+    /// gösterim ve süzme içindir, aksi halde sütun toplamları görüşme sayısını aşardı.</summary>
+    public int? IkinciGorevliId { get; set; }
+    public Kullanici? IkinciGorevli { get; set; }
+
     public DateTime Tarih { get; set; } = DateTime.UtcNow;
 
     /// <summary>Bu üyeyle kaçıncı görüşme olduğu (1, 2, 3...). Kayıt anında sunucuda hesaplanır, elle girilmez.</summary>

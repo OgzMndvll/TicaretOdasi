@@ -21,7 +21,9 @@ public record SifreSifirlaDto(string YeniSifre);
 
 public record GorusmeYazDto(int EsnafId, int GorevliId, DateTime Tarih, string Sonuc, string? Not, bool TakipGerekli,
     /// <summary>Üyeyle kaçıncı görüşme. Boş bırakılırsa sunucu sıradaki numarayı verir.</summary>
-    int? Sira = null);
+    int? Sira = null,
+    /// <summary>Görüşmeye eşlik eden ikinci çalışan. İsteğe bağlı; birincil görevliyle aynı olamaz.</summary>
+    int? IkinciGorevliId = null);
 
 public record GorevlendirmeYazDto(int GorevliId, int? EsnafId, int? GrupId, DateTime Tarih, string? Not, string? Durum);
 

@@ -127,6 +127,8 @@ export interface GorusmeKaydi {
   esnafId: number; esnaf: string; isletme: string; grup?: string | null; grupNo?: number | null;
   ilce?: string | null; mahalle?: string | null; telefon?: string | null; esnafDurum: string;
   gorevliId: number; gorevli: string;
+  /** Görüşmeye eşlik eden ikinci çalışan ("Görüşecek Kişi"); isteğe bağlıdır. */
+  ikinciGorevliId?: number | null; ikinciGorevli?: string | null;
 }
 
 
@@ -154,6 +156,32 @@ export interface DashboardOzet {
 export interface GrupRaporSatiri {
   id: number; no?: number | null; ad: string; toplamEsnaf: number; gorusme: number;
   onaylayan: number; reddedilen: number; kararsiz: number; gorusulmeyen: number; onayOrani: number;
+}
+
+export interface CalisanRaporSatiri {
+  id: number; adSoyad: string; gorev?: string | null; birim?: string | null; durum: string; rol: string;
+  /** Çalışanın görüşen görevli olarak yaptığı görüşme sayısı (ikinci kişi katılımı buraya girmez). */
+  gorusme: number;
+  /** Kaç farklı üyeyle görüşüldüğü. */
+  uyeSayisi: number;
+  onayVerdi: number; onayVermedi: number; kararsiz: number;
+  /** Bu çalışanın görüşmesinde onay veren farklı üye sayısı. */
+  onayliUyeSayisi: number;
+  /** İkinci kişi olarak katıldığı görüşme sayısı; sayımlara dahil değildir. */
+  ikinciKatilim: number;
+  sonGorusme?: string | null; onayOrani: number;
+}
+
+export interface CalisanRaporu {
+  satirlar: CalisanRaporSatiri[];
+  toplam: { calisan: number; gorusme: number; onayVerdi: number; onayVermedi: number; kararsiz: number };
+}
+
+export interface CalisanGorusmeSatiri {
+  id: number; gorevliId: number; gorevli: string; ikinciGorevli?: string | null;
+  esnafId: number; esnaf: string; isletme: string; grup?: string | null; grupNo?: number | null;
+  ilce?: string | null; telefon?: string | null;
+  sira: number; tarih: string; sonuc: string; takipGerekli: boolean; not?: string | null;
 }
 
 // ---- Yardımcılar ----

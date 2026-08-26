@@ -63,9 +63,10 @@ public class DashboardController(EtsoDbContext db) : ControllerBase
             })
             .ToList();
 
+        // Ada göre gruplamak, aynı adı taşıyan iki çalışanı tek satırda birleştirirdi; anahtar Id'dir.
         var gorevliPerformans = await aralik
-            .GroupBy(g => g.Gorevli!.AdSoyad)
-            .Select(g => new { adSoyad = g.Key, adet = g.Count() })
+            .GroupBy(g => new { g.GorevliId, g.Gorevli!.AdSoyad })
+            .Select(g => new { g.Key.GorevliId, adSoyad = g.Key.AdSoyad, adet = g.Count() })
             .OrderByDescending(g => g.adet)
             .Take(5)
             .ToListAsync();

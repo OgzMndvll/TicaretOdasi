@@ -166,6 +166,7 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
         var esnaf = await db.Esnaflar.AsNoTracking()
             .Include(e => e.Grup).Include(e => e.Gorevli).Include(e => e.Yetkililer)
             .Include(e => e.Gorusmeler.OrderBy(g => g.Sira).ThenBy(g => g.Tarih)).ThenInclude(g => g.Gorevli)
+            .Include(e => e.Gorusmeler.OrderBy(g => g.Sira).ThenBy(g => g.Tarih)).ThenInclude(g => g.IkinciGorevli)
             .FirstOrDefaultAsync(e => e.Id == id);
         if (esnaf is null) return NotFound();
 
@@ -186,6 +187,7 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
             {
                 g.Id, g.Sira, g.Tarih, g.Sonuc, g.Not, g.TakipGerekli,
                 g.GorevliId, Gorevli = g.Gorevli?.AdSoyad,
+                g.IkinciGorevliId, IkinciGorevli = g.IkinciGorevli?.AdSoyad,
             }),
         });
     }

@@ -298,7 +298,10 @@ export function ModulePage({ kind }: { kind: PageKind }) {
     setDuzenleme({
       form: "gorusme", id: g.id, baslik: `Görüşmeyi Düzenle — ${g.sira}. Görüşme`,
       degerler: {
-        sira: String(g.sira), gorevliId: String(g.gorevliId ?? ""), tarih: tarihGirdisi(g.tarih),
+        sira: String(g.sira), gorevliId: String(g.gorevliId ?? ""), gorevliIdEtiket: g.gorevli ?? "",
+        ikinciGorevliId: g.ikinciGorevliId ? String(g.ikinciGorevliId) : "",
+        ikinciGorevliIdEtiket: g.ikinciGorevli ?? "",
+        tarih: tarihGirdisi(g.tarih),
         sonuc: g.sonuc, takipGerekli: g.takipGerekli ? "Evet" : "Hayır",
         not: g.not ?? "", esnafId: String(detay.esnaf.id),
       },
@@ -382,6 +385,7 @@ export function ModulePage({ kind }: { kind: PageKind }) {
         degerler: {
           adSoyad: e.adSoyad, isletme: e.isletme, telefon: e.telefon ?? "", isTelefonu: e.isTelefonu ?? "",
           grupId: e.grupId ? String(e.grupId) : "", gorevliId: e.gorevliId ? String(e.gorevliId) : "",
+          gorevliIdEtiket: e.gorevli ?? "",
           il: e.il ?? "", ilce: e.ilce ?? "", mahalle: e.mahalle ?? "", adres: e.adres ?? "", vergiNo: e.vergiNo ?? "", durum: e.durum,
           uyeSicilNo: e.uyeSicilNo ?? "", ticaretSicilNo: e.ticaretSicilNo ?? "", sirketTipi: e.sirketTipi ?? "",
           tabelaUnvani: e.tabelaUnvani ?? "", gorevi: e.gorevi ?? "", vergiDairesi: e.vergiDairesi ?? "",

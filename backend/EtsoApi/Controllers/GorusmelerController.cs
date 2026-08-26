@@ -18,6 +18,8 @@ public class GorusmelerController(EtsoDbContext db, CanliBildirim canli) : Contr
     {
         var sorgu = db.Gorusmeler.AsNoTracking();
         if (esnafId is not null) sorgu = sorgu.Where(g => g.EsnafId == esnafId);
+        // Yalnızca birincil görevli: üye listesi ve çalışan raporu da görüşmeyi ona sayar,
+        // üç uç farklı sayı vermemeli.
         if (gorevliId is not null) sorgu = sorgu.Where(g => g.GorevliId == gorevliId);
         if (grupId is not null) sorgu = sorgu.Where(g => g.Esnaf!.GrupId == grupId);
         if (!string.IsNullOrWhiteSpace(sonuc)) sorgu = sorgu.Where(g => g.Sonuc == sonuc);
@@ -47,6 +49,8 @@ public class GorusmelerController(EtsoDbContext db, CanliBildirim canli) : Contr
                 EsnafDurum = g.Esnaf.Durum,
                 g.GorevliId,
                 Gorevli = g.Gorevli!.AdSoyad,
+                g.IkinciGorevliId,
+                IkinciGorevli = g.IkinciGorevli != null ? g.IkinciGorevli.AdSoyad : null,
             })
             .ToListAsync();
 
@@ -82,9 +86,10 @@ public class GorusmelerController(EtsoDbContext db, CanliBildirim canli) : Contr
             })
             .ToList();
 
+        // Ada göre gruplamak, aynı adı taşıyan iki çalışanı tek satırda birleştirirdi; anahtar Id'dir.
         var gorevliPerformans = await kaynak
-            .GroupBy(g => g.Gorevli!.AdSoyad)
-            .Select(g => new { adSoyad = g.Key, adet = g.Count() })
+            .GroupBy(g => new { g.GorevliId, g.Gorevli!.AdSoyad })
+            .Select(g => new { g.Key.GorevliId, adSoyad = g.Key.AdSoyad, adet = g.Count() })
             .OrderByDescending(g => g.adet)
             .Take(5)
             .ToListAsync();
@@ -109,6 +114,9 @@ public class GorusmelerController(EtsoDbContext db, CanliBildirim canli) : Contr
         if (!await db.Kullanicilar.AnyAsync(k => k.Id == gorevliId))
             return BadRequest(new { mesaj = "Görevli bulunamadı." });
 
+        var ikinciHata = await IkinciGorevliyiDogrula(dto.IkinciGorevliId, gorevliId);
+        if (ikinciHata is not null) return BadRequest(new { mesaj = ikinciHata });
+
         // Kaçıncı görüşme olduğu formda seçilebilir; seçilmezse sıradaki numara verilir.
         // Üst sınır mevcut görüşme sayısının bir fazlasıdır: numara atlanarak boşluk bırakılamaz.
         var mevcutSayi = await db.Gorusmeler.CountAsync(g => g.EsnafId == dto.EsnafId);
@@ -120,6 +128,7 @@ public class GorusmelerController(EtsoDbContext db, CanliBildirim canli) : Contr
         {
             EsnafId = dto.EsnafId,
             GorevliId = gorevliId,
+            IkinciGorevliId = dto.IkinciGorevliId,
             Sira = sira,
             Tarih = dto.Tarih == default ? DateTime.UtcNow : dto.Tarih,
             Sonuc = string.IsNullOrWhiteSpace(dto.Sonuc) ? "Kararsız" : dto.Sonuc,
@@ -150,6 +159,9 @@ public class GorusmelerController(EtsoDbContext db, CanliBildirim canli) : Contr
         if (!await db.Kullanicilar.AnyAsync(k => k.Id == dto.GorevliId))
             return BadRequest(new { mesaj = "Görevli bulunamadı." });
 
+        var ikinciHata = await IkinciGorevliyiDogrula(dto.IkinciGorevliId, dto.GorevliId);
+        if (ikinciHata is not null) return BadRequest(new { mesaj = ikinciHata });
+
         if (dto.Sira is not null)
         {
             var esnafGorusmeSayisi = await db.Gorusmeler.CountAsync(g => g.EsnafId == gorusme.EsnafId);
@@ -159,6 +171,7 @@ public class GorusmelerController(EtsoDbContext db, CanliBildirim canli) : Contr
         }
 
         gorusme.GorevliId = dto.GorevliId;
+        gorusme.IkinciGorevliId = dto.IkinciGorevliId;
         if (dto.Tarih != default) gorusme.Tarih = dto.Tarih;
         if (!string.IsNullOrWhiteSpace(dto.Sonuc)) gorusme.Sonuc = dto.Sonuc;
         gorusme.Not = dto.Not;
@@ -181,6 +194,15 @@ public class GorusmelerController(EtsoDbContext db, CanliBildirim canli) : Contr
         await EsnafDurumunuEsitle(esnafId);
         await canli.DegistiAsync("gorusme", id);
         return NoContent();
+    }
+
+    /// <summary>İkinci çalışan doğrulaması. Hata varsa mesajı, yoksa null döner.</summary>
+    private async Task<string?> IkinciGorevliyiDogrula(int? ikinciGorevliId, int gorevliId)
+    {
+        if (ikinciGorevliId is null) return null;
+        if (ikinciGorevliId == gorevliId) return "Görüşecek kişi, görüşen çalışanla aynı olamaz.";
+        return await db.Kullanicilar.AnyAsync(k => k.Id == ikinciGorevliId)
+            ? null : "Görüşecek kişi bulunamadı.";
     }
 
     /// <summary>Esnafın durumunu ve son görüşme tarihini, kalan en güncel görüşmesiyle eşitler.</summary>

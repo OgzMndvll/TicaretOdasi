@@ -601,3 +601,21 @@ tr.tiklanabilir:hover{background:#f4f8fd}
 /* Panel başlığının yanına rozet alabilmesi için. */
 .panel h2.baslik-satiri{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 @media(max-width:560px){.canli-rozet{font-size:9px;height:23px;padding:0 8px}}
+
+/* ---- Çalışan bazlı görüşme raporu (Raporlar sayfası) ---- */
+.calisan-raporu{margin-top:22px}
+.calisan-raporu .bolum-basligi{margin-bottom:12px}
+.calisan-raporu .bolum-basligi h2{font-size:16px;margin:0 0 5px}
+.calisan-raporu .bolum-basligi p{margin:0;color:var(--muted);font-size:11px;line-height:1.5;max-width:900px}
+.calisan-raporu .filter-card{margin-bottom:12px}
+.calisan-tablosu{min-width:1180px}
+.calisan-tablosu tr.acik-satir td{background:#f4f8ff}
+.calisan-tablosu .bos-satir{color:var(--muted);text-align:center;white-space:normal}
+.calisan-tablosu .detay-ac{display:inline-flex;align-items:center;gap:6px;height:29px;padding:0 10px;background:#fff;border:1px solid var(--line);border-radius:5px;font-size:10px;color:var(--blue)}
+.calisan-tablosu .detay-ac:disabled{color:var(--muted);background:#f7f9fc;cursor:default}
+.calisan-tablosu tr.detay-satiri>td{height:auto;padding:12px;background:#f9fbfd;white-space:normal}
+.calisan-tablosu tr.detay-satiri table{min-width:920px;background:#fff}
+.calisan-tablosu tr.detay-satiri .table-scroll{border:1px solid var(--line);border-radius:6px}
+.calisan-tablosu tr.detay-satiri p{margin:0;font-size:11px}
+.calisan-tablosu .gorusme-not{white-space:normal;max-width:280px}
+@media(max-width:1400px){.calisan-raporu .stats-grid.four{grid-template-columns:repeat(2,minmax(0,1fr))}}

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, CircleHelp, CloudDownload, MessageSquareText, Store, XCircle } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { CalisanRaporu } from "./calisan-raporu";
 import { BarList, DonutChart, LineChart } from "@/components/ui/charts";
 import { StatCard } from "@/components/ui/stat-card";
 import { Toast } from "@/components/ui/toast";
@@ -66,6 +67,7 @@ export function ReportsPage() {
         <td><span className="ratio"><i style={{ width: `${Math.min(100, r.onayOrani)}%` }} />%{r.onayOrani.toLocaleString("tr-TR")}</span></td>
       </tr>)}</tbody>
     </table></div></section>
+    <CalisanRaporu onToast={setToast} />
     <Toast message={toast} onClose={() => setToast("")} />
   </AppShell>;
 }

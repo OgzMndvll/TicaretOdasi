@@ -12,6 +12,7 @@ export interface DetaySatiri {
 export interface DetayGorusme {
   id: number; sira: number; tarih: string; sonuc: string; not?: string | null;
   takipGerekli?: boolean; gorevliId?: number | null; gorevli?: string | null;
+  ikinciGorevliId?: number | null; ikinciGorevli?: string | null;
 }
 
 /**
@@ -51,12 +52,13 @@ export function DetailModal({ open, baslik, satirlar, gorusmeler, onClose, onGor
           ? <p className="gorusme-bos">Bu üyeyle henüz görüşme yapılmamış. &quot;Yeni Görüşme&quot; ile ilk kaydı ekleyin.</p>
           : <div className="table-scroll"><table>
             <thead><tr>
-              <th>Görüşme</th><th>Görüşen Çalışan</th><th>Tarih</th><th>Sonuç</th><th>Takip</th><th>Not</th>
+              <th>Görüşme</th><th>Görüşen Çalışan</th><th>Görüşecek Kişi</th><th>Tarih</th><th>Sonuç</th><th>Takip</th><th>Not</th>
               {(onGorusmeDuzenle || onGorusmeSil) && <th>İşlemler</th>}
             </tr></thead>
             <tbody>{gorusmeler.map(g => <tr key={g.id}>
               <td><strong>{g.sira}. Görüşme</strong></td>
               <td>{g.gorevli ?? "-"}</td>
+              <td>{g.ikinciGorevli ?? "-"}</td>
               <td>{tarihGoster(g.tarih)}</td>
               <td><span className={`badge ${durumTonu(g.sonuc)}`}>{g.sonuc}</span></td>
               <td>{g.takipGerekli ? <span className="badge warning">Gerekli</span> : "-"}</td>
