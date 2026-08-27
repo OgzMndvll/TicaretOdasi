@@ -11,6 +11,9 @@ public record EsnafYazDto(
     string? FaaliyetDetayi = null, string? NaceKodu = null, string? NaceAdi = null,
     string? Gorevi = null, string? IsTelefonu = null, DateTime? KayitTarihi = null);
 
+/// <summary>Üye kartındaki "Düzenle" düğmesi: yalnızca üyelik durumu (Faal / Askı / Pasif).</summary>
+public record EsnafUyelikDurumuDto(string UyelikDurumu);
+
 public record GrupYazDto(string Ad, string? Aciklama, string? Tur, int? UstGrupId, string? Durum, int? No = null);
 
 public record KullaniciYazDto(

@@ -43,12 +43,20 @@ export default function GirisSayfasi() {
   return <div className="giris-ekran">
     {/* Arka plan CSS'te url(...) ile yazılsaydı basePath ön eki eklenmez, alt yolda 404 olurdu. */}
     <aside className="giris-tanitim" style={{ ["--giris-arkaplan" as string]: `url("${varlik("/giris-arkaplan.png")}")` }}>
-      <div className="giris-marka">
-        <Image src={varlik("/etso.png")} alt="Erzurum Ticaret ve Sanayi Odası" width={300} height={60} priority />
-      </div>
-      <div className="giris-tanitim-govde">
-        <h1>ERZURUM TİCARET VE SANAYİ ODASI</h1>
-        <p className="giris-alt-baslik">Dijital Yönetim Sistemi</p>
+      {/* Logo ve metin tek blok halinde panelin ortasında durur. Başlık kurum adını
+          tekrarlamaz; o bilgi zaten logonun içinde yazıyor. */}
+      <div className="giris-tanitim-icerik">
+        <div className="giris-marka">
+          {/* Amblemli beyaz sürüm: sol panel koyu olduğu için renk filtresi gerekmez. */}
+          <Image src={varlik("/etso-sidebar.png")} alt="Erzurum Ticaret ve Sanayi Odası" width={941} height={694} priority />
+        </div>
+        <div className="giris-tanitim-govde">
+          <h1>Dijital Yönetim Sistemi</h1>
+          <p className="giris-alt-baslik">
+            Üye kayıtları, saha görüşmeleri ve raporlama<br />tek panelde.
+          </p>
+          <span className="giris-tanitim-not">1885&apos;ten bugüne Erzurum ticaretinin hizmetinde</span>
+        </div>
       </div>
     </aside>
 
@@ -109,9 +117,18 @@ export default function GirisSayfasi() {
             <small>Oturumunuz şifreli olarak korunmaktadır.</small>
           </div>
         </span>
-        <span className="giris-telif">
-          © {new Date().getFullYear()} Erzurum Ticaret ve Sanayi Odası<br />
-          <small>Tüm hakları saklıdır.</small>
+        {/* Telif metninin yerine projeyi hazırlayan şirketlerin logoları. Form sütunu açık
+            zeminli olduğu için logoların lacivert sürümleri kullanılır. */}
+        <span className="giris-hazirlayan">
+          <a href="https://maydanozasist.com" target="_blank" rel="noopener noreferrer">
+            <Image src={varlik("/footer-maydanoz.png")} alt="Maydanoz Asist"
+              width={956} height={350} className="hazirlayan-logo hazirlayan-logo-maydanoz" />
+          </a>
+          <i aria-hidden="true" />
+          <a href="https://ajansorkestra.com.tr" target="_blank" rel="noopener noreferrer">
+            <Image src={varlik("/footer-ajans.png")} alt="Ajans Orkestra"
+              width={940} height={94} className="hazirlayan-logo hazirlayan-logo-ajans" />
+          </a>
         </span>
       </footer>
     </main>

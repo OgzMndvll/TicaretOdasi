@@ -27,7 +27,8 @@ export function ImportModal({ open, baslik, yuklemeYolu, sablonYolu, onClose, on
     try {
       const s = await api.yukle<IceAktarmaSonucu>(yuklemeYolu, secili);
       setSonuc(s);
-      if (s.eklenen > 0) onDone(`${s.eklenen} kayıt içe aktarıldı.`);
+      if (s.eklenen > 0 || s.guncellenen > 0)
+        onDone(`${s.eklenen} yeni kayıt eklendi, ${s.guncellenen} kayıt güncellendi.`);
     } catch (e) {
       setHata(e instanceof ApiError ? e.message : "Sunucuya ulaşılamadı.");
     } finally {
@@ -40,7 +41,9 @@ export function ImportModal({ open, baslik, yuklemeYolu, sablonYolu, onClose, on
       <p style={{ lineHeight: 1.6, color: "#5b6779" }}>
         Sistem şablonunun yanı sıra oda üye listelerindeki <b>UNVAN</b>, <b>ADRES</b>, <b>İŞ TELEFONU</b>,
         <b> CEP TELEFONU (GSM)</b> ve <b>YETKİLİ ADI SOYADI</b> sütunları da otomatik tanınır.
-        Sistemde zaten kayıtlı olan satırlar güvenli şekilde atlanır.
+        Sistemde zaten kayıtlı olan üyeler <b>ikizlenmez</b>: değişen alanları güncellenir,
+        değişmeyenler olduğu gibi bırakılır. Görüşme sonuçları ve atanan görevli içe aktarmadan
+        etkilenmez; dosyada boş bırakılan bir sütun mevcut bilgiyi silmez.
       </p>
       <button type="button" className="secondary-button" style={{ alignSelf: "flex-start" }}
         onClick={() => api.indir(sablonYolu).catch(() => setHata("Şablon indirilemedi."))}>
@@ -54,7 +57,8 @@ export function ImportModal({ open, baslik, yuklemeYolu, sablonYolu, onClose, on
       {secili && <p style={{ display: "flex", alignItems: "center", gap: 8 }}><FileSpreadsheet size={17} />{secili.name} ({Math.ceil(secili.size / 1024)} KB)</p>}
       {hata && <p role="alert" style={{ color: "#c0392b" }}>{hata}</p>}
       {sonuc && <div className="panel" style={{ padding: 14 }}>
-        <b>Sonuç:</b> {sonuc.eklenen} kayıt eklendi, {sonuc.atlanan} kayıt zaten mevcut olduğu için atlandı.
+        <b>Sonuç:</b> {sonuc.eklenen} yeni kayıt eklendi, {sonuc.guncellenen} kayıt güncellendi,
+        {" "}{sonuc.atlanan} kayıt değişmediği için olduğu gibi bırakıldı.
         {sonuc.hatalar.length > 0 && <>
           <br /><b>Uyarılar ({sonuc.hatalar.length}):</b>
           <ul style={{ margin: "6px 0 0 18px", maxHeight: 160, overflowY: "auto" }}>

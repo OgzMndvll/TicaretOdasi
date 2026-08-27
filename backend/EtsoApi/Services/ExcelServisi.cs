@@ -2,7 +2,8 @@ using ClosedXML.Excel;
 
 namespace EtsoApi.Services;
 
-public record IceAktarmaSonucu(int Eklenen, int Atlanan, List<string> Hatalar);
+/// <param name="Guncellenen">Zaten kayıtlı olup bu dosyayla en az bir alanı değişen kayıt sayısı.</param>
+public record IceAktarmaSonucu(int Eklenen, int Atlanan, List<string> Hatalar, int Guncellenen = 0);
 
 public static class ExcelServisi
 {

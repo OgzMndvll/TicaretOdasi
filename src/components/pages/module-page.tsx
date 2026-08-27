@@ -15,7 +15,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Toast } from "@/components/ui/toast";
 import {
   api, ApiError, API_ERISIM_HATASI, durumTonu, sayiGoster, tarihGoster, yuzde,
-  EsnafKaydi, GorusmeKaydi, GrupKaydi, KullaniciKaydi, OnayKaydi, Sayfali,
+  EsnafKaydi, EsnafYetkilisi, GorusmeKaydi, GrupKaydi, KullaniciKaydi, OnayKaydi, Sayfali,
 } from "@/lib/api";
 import { kimlik, yoneticiMi } from "@/lib/auth";
 import { CanliOlay, useCanliVeri } from "@/lib/canli";
@@ -73,6 +73,10 @@ type DetayIstegi = {
   baslik: string; satirlar: DetaySatiri[]; gorusmeler?: DetayGorusme[];
   /** Görüşme eklerken forma önden doldurulacak üye. */
   esnaf?: { id: number; etiket: string };
+  /** Üyenin tam kaydı. Karttaki "Düzenle" düğmesi üyelik durumu formunu bundan doldurur. */
+  kayit?: EsnafKaydi;
+  /** Oda kaydındaki tüm yetkililer; birden fazlaysa kartta ayrı bölüm olarak listelenir. */
+  yetkililer?: EsnafYetkilisi[];
 };
 
 /**
@@ -278,7 +282,7 @@ export function ModulePage({ kind }: { kind: PageKind }) {
 
   const esnafDetayiniAc = useCallback((esnafId: number) => {
     api.get<EsnafKaydi & { gorusmeler: DetayGorusme[] }>(`/api/esnaflar/${esnafId}`)
-      .then(tam => setDetay(d => d ? { ...d, gorusmeler: tam.gorusmeler } : d))
+      .then(tam => setDetay(d => d ? { ...d, gorusmeler: tam.gorusmeler, kayit: tam, yetkililer: tam.yetkililer } : d))
       .catch(() => {});
   }, []);
 
@@ -302,9 +306,25 @@ export function ModulePage({ kind }: { kind: PageKind }) {
         ikinciGorevliId: g.ikinciGorevliId ? String(g.ikinciGorevliId) : "",
         ikinciGorevliIdEtiket: g.ikinciGorevli ?? "",
         tarih: tarihGirdisi(g.tarih),
-        sonuc: g.sonuc, takipGerekli: g.takipGerekli ? "Evet" : "Hayır",
+        sonuc: g.sonuc, takipGerekli: g.takipGerekli ? "Takip Edilecek" : "Gelmeyecek",
         not: g.not ?? "", esnafId: String(detay.esnaf.id),
       },
+    });
+  }
+
+  /**
+   * Üye kartındaki "Düzenle": yalnızca üyelik durumu (Faal / Askı / Pasif) değiştirilebilir.
+   * Form, kaydın tamamını değil yalnızca durumu gönderen dar uca bağlıdır
+   * (PUT /api/esnaflar/{id}/uyelik-durumu), bu yüzden diğer alanlara buradan dokunulamaz.
+   */
+  function esnafDurumuDuzenle() {
+    const e = detay?.kayit;
+    if (!e) return;
+    setDonulecekEsnafId(e.id);
+    setDetay(null);
+    setDuzenleme({
+      form: "esnafDurum", id: e.id, baslik: `Üyelik Durumu — ${e.isletme}`,
+      degerler: { uyelikDurumu: e.uyelikDurumu ?? "Faal" },
     });
   }
 
@@ -335,6 +355,8 @@ export function ModulePage({ kind }: { kind: PageKind }) {
           ],
           gorusmeler: tam.gorusmeler,
           esnaf: { id: tam.id, etiket: `${tam.adSoyad} — ${tam.isletme}` },
+          kayit: tam,
+          yetkililer: tam.yetkililer,
         }))
         .catch(() => setToast("Detay alınamadı."));
       return;
@@ -562,7 +584,9 @@ export function ModulePage({ kind }: { kind: PageKind }) {
       }}
       onSuccess={setToast} onSaved={yenile} />
     <DetailModal open={!!detay} baslik={detay?.baslik ?? ""} satirlar={detay?.satirlar ?? []}
+      yetkililer={detay?.yetkililer} birincilYetkili={detay?.kayit?.adSoyad}
       gorusmeler={detay?.gorusmeler} onClose={() => setDetay(null)}
+      onDuzenle={detay?.kayit ? esnafDurumuDuzenle : undefined}
       onGorusmeEkle={detay?.esnaf ? gorusmeEkle : undefined}
       onGorusmeDuzenle={detay?.esnaf ? gorusmeDuzenle : undefined}
       onGorusmeSil={detay?.esnaf ? gorusmeSil : undefined} />
@@ -810,21 +834,22 @@ function ModuleTable({ kind, kayitlar, yukleniyor, onKarar, onGoster, onDuzenle,
   }
   const liste = kayitlar as EsnafKaydi[];
   return <div className="table-scroll"><table>
-    <thead><tr><th>Sicil No</th><th>Unvan / Yetkili</th><th>Meslek Grubu</th><th>Üyelik Durumu</th><th>Telefon</th><th>İlçe</th><th>Görevli</th><th>Son Görüşme</th><th>Onay Durumu</th><th>İşlemler</th></tr></thead>
-    {/* Satıra tıklayınca üyenin görüşme ekranı açılır; satır rengi üyenin onay durumunu gösterir. */}
-    <tbody>{!liste.length ? <Bos yukleniyor={yukleniyor} sutun={10} /> : liste.map(e => <tr key={e.id}
+    <thead><tr><th>Sicil No</th><th>Unvan / Yetkili</th><th>Meslek Grubu</th><th>Üyelik Durumu</th><th>Telefon</th><th>İlçe</th><th>Görevli</th><th>Son Görüşme</th><th>Onay Durumu</th></tr></thead>
+    {/* Satıra tıklayınca üyenin görüşme ekranı açılır; satır rengi üyenin onay durumunu gösterir.
+        "İşlemler" sütunu kaldırıldı: üyeyle ilgili tüm işlemler üye kartından yürütülür. */}
+    <tbody>{!liste.length ? <Bos yukleniyor={yukleniyor} sutun={9} /> : liste.map(e => <tr key={e.id}
       className={`tiklanabilir ${satirTonu(e.durum)}`} onClick={() => onGoster(e)}
       title="Görüşmeleri aç">
       <td>{e.uyeSicilNo ?? "-"}</td>
-      <td><strong>{e.isletme}</strong><small>{e.adSoyad}{e.gorevi ? ` — ${e.gorevi}` : ""}</small></td>
+      <td><strong>{e.isletme}</strong><small>{e.adSoyad}{e.gorevi ? ` — ${e.gorevi}` : ""}
+        {/* Şirketin oda kaydında birden çok imza yetkilisi varsa listede de belli olsun. */}
+        {!!e.yetkiliSayisi && e.yetkiliSayisi > 1 && <b className="yetkili-rozeti">+{e.yetkiliSayisi - 1} yetkili</b>}</small></td>
       <td>{e.grup ? (e.grupNo ? `${e.grupNo}. ${e.grup}` : e.grup) : "-"}</td>
       <td><span className={`badge ${durumTonu(e.uyelikDurumu ?? "")}`}>{e.uyelikDurumu ?? "-"}</span>
         {e.uyelikDurumu === "Askı" && e.durumDegisimNedeni && <small>{e.durumDegisimNedeni}</small>}</td>
       <td>{e.telefon ?? e.isTelefonu ?? "-"}</td><td>{e.ilce ?? "-"}</td>
       <td>{e.gorevli ?? "-"}</td><td>{tarihGoster(e.sonGorusmeTarihi)}</td>
       <td><span className={`badge ${durumTonu(e.durum)}`}>{e.durum}</span></td>
-      {/* İşlem butonları satır tıklamasını tetiklemesin. */}
-      <td onClick={ev => ev.stopPropagation()}><SatirIslemleri kayit={e} {...islemler} /></td>
     </tr>)}</tbody>
   </table></div>;
 }

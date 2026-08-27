@@ -23,6 +23,10 @@ const telefonTemizle = (deger: string) => deger.replace(/\D/g, "").slice(0, TELE
 const ESNAF_DURUMLARI = ["Onay Verdi", "Onay Vermedi", "Kararsız", "Görüşülmedi"];
 // Odadaki üyelik durumu (kaynak raporun "DURUM TANIMI" kolonu). Görüşme onay durumundan ayrıdır.
 const UYELIK_DURUMLARI = ["Faal", "Askı", "Pasif"];
+// Görüşme sonrası izlenecek yol. Kayıtta `TakipGerekli` (bool) alanında tutulur:
+// "Takip Edilecek" = true, "Gelmeyecek" = false. Eski "Evet/Hayır" etiketleri bunlarla değiştirildi.
+const TAKIP_SECENEKLERI = ["Takip Edilecek", "Gelmeyecek"];
+const TAKIP_EDILECEK = TAKIP_SECENEKLERI[0];
 
 /** `gonder`, isteğe bağlı olarak kendi başarı mesajını döndürebilir (ör. sunucunun türettiği kullanıcı adı). */
 type FormTanimi = { alanlar: Alan[]; buton: string; gonder: (v: Record<string, string>) => Promise<string | void> };
@@ -103,6 +107,7 @@ export const formlar: Record<string, FormTanimi> = {
       { name: "ikinciGorevliId", label: "Görüşecek Kişi (isteğe bağlı ikinci çalışan)", tip: "select", secenekKaynagi: "gorevliler" },
       { name: "tarih", label: "Görüşme Tarihi", tip: "date", zorunlu: true },
       { name: "sonuc", label: "Görüşme Sonucu", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Onay Verdi", "Onay Vermedi", "Kararsız"], zorunlu: true },
+      { name: "takipGerekli", label: "Görüşme Sonrası Takip Durumu", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: TAKIP_SECENEKLERI, zorunlu: true },
       { name: "not", label: "Not / Yorum", tip: "textarea" },
     ],
     buton: "Görüşmeyi Kaydet",
@@ -111,9 +116,8 @@ export const formlar: Record<string, FormTanimi> = {
         esnafId: Number(v.esnafId), gorevliId: v.gorevliId ? Number(v.gorevliId) : 0,
         ikinciGorevliId: v.ikinciGorevliId ? Number(v.ikinciGorevliId) : null,
         tarih: v.tarih, sonuc: v.sonuc, not: v.not || null,
-        // "Takip gerekli" alanı yeni görüşme formundan kaldırıldı; sunucudaki alan bool
-        // olduğu için açıkça false gönderilir (düzenleme ekranından hâlâ değiştirilebilir).
-        takipGerekli: false,
+        // Takip durumu sunucuda bool tutulur: "Takip Edilecek" = true, "Gelmeyecek" = false.
+        takipGerekli: v.takipGerekli === TAKIP_EDILECEK,
         sira: v.sira ? Number(v.sira) : null,
       });
     },
@@ -154,6 +158,16 @@ export const duzenlemeFormlari: Record<string, DuzenlemeTanimi> = {
     buton: "Değişiklikleri Kaydet",
     gonder: (id, v) => api.put(`/api/esnaflar/${id}`, esnafGovdesi(v)),
   },
+  // Üye kartındaki "Düzenle" düğmesi bu formu açar: görünen ve gönderilen tek alan üyelik
+  // durumudur. Ayrı ve dar bir uç kullanılır (tam gövde bekleyen PUT /api/esnaflar/{id} değil),
+  // böylece üyenin diğer bilgileri bu ekrandan hiçbir şekilde değiştirilemez.
+  esnafDurum: {
+    alanlar: [
+      { name: "uyelikDurumu", label: "Üyelik Durumu", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: UYELIK_DURUMLARI, zorunlu: true },
+    ],
+    buton: "Üyelik Durumunu Kaydet",
+    gonder: (id, v) => api.put(`/api/esnaflar/${id}/uyelik-durumu`, { uyelikDurumu: v.uyelikDurumu }),
+  },
   grup: {
     alanlar: [
       { name: "no", label: "Meslek Grubu No", tip: "text" },
@@ -186,7 +200,7 @@ export const duzenlemeFormlari: Record<string, DuzenlemeTanimi> = {
       { name: "ikinciGorevliId", label: "Görüşecek Kişi (isteğe bağlı ikinci çalışan)", tip: "select", secenekKaynagi: "gorevliler" },
       { name: "tarih", label: "Görüşme Tarihi", tip: "date", zorunlu: true },
       { name: "sonuc", label: "Görüşme Sonucu", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Onay Verdi", "Onay Vermedi", "Kararsız"], zorunlu: true },
-      { name: "takipGerekli", label: "Takip Gerekli mi?", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Hayır", "Evet"], zorunlu: true },
+      { name: "takipGerekli", label: "Görüşme Sonrası Takip Durumu", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: TAKIP_SECENEKLERI, zorunlu: true },
       { name: "not", label: "Not / Yorum", tip: "textarea" },
       { name: "esnafId", label: "", tip: "hidden" },
     ],
@@ -194,7 +208,7 @@ export const duzenlemeFormlari: Record<string, DuzenlemeTanimi> = {
     gonder: (id, v) => api.put(`/api/gorusmeler/${id}`, {
       esnafId: Number(v.esnafId), gorevliId: v.gorevliId ? Number(v.gorevliId) : 0,
       ikinciGorevliId: v.ikinciGorevliId ? Number(v.ikinciGorevliId) : null,
-      tarih: v.tarih, sonuc: v.sonuc, not: v.not || null, takipGerekli: v.takipGerekli === "Evet",
+      tarih: v.tarih, sonuc: v.sonuc, not: v.not || null, takipGerekli: v.takipGerekli === TAKIP_EDILECEK,
       sira: v.sira ? Number(v.sira) : null,
     }),
   },

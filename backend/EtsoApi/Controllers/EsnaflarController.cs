@@ -81,6 +81,9 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
                 e.Durum, e.SonGorusmeTarihi, e.KayitTarihi,
                 e.UyeSicilNo, e.TicaretSicilNo, e.SirketTipi, e.Gorevi,
                 e.UyelikDurumu, e.DurumDegisimTarihi, e.DurumDegisimNedeni, e.NaceKodu,
+                // Birden çok imza yetkilisi olan şirketler listede de ayırt edilebilsin diye
+                // yalnızca sayı taşınır; adların tamamı detay ucundan gelir.
+                YetkiliSayisi = e.Yetkililer.Count(),
             })
             .ToListAsync();
 
@@ -249,6 +252,29 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
         esnaf.GorevliId = dto.GorevliId;
         if (!string.IsNullOrWhiteSpace(dto.Durum)) esnaf.Durum = dto.Durum;
         OdaBilgileriniYaz(esnaf, dto);
+        await db.SaveChangesAsync();
+        await canli.DegistiAsync("esnaf", esnaf.Id);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Yalnızca üyelik durumunu (Faal / Askı / Pasif) değiştirir. Üye kartındaki "Düzenle"
+    /// düğmesi bu ucu kullanır: tam gövde beklemediği için kaydın geri kalanı — istemci ne
+    /// gönderirse göndersin — değişmez.
+    /// </summary>
+    [HttpPut("{id:int}/uyelik-durumu")]
+    public async Task<IActionResult> UyelikDurumunuGuncelle(int id, EsnafUyelikDurumuDto dto)
+    {
+        if (!UyelikDurumlari.Contains(dto.UyelikDurumu))
+            return BadRequest(new { mesaj = $"Geçersiz üyelik durumu. Geçerli değerler: {string.Join(", ", UyelikDurumlari)}" });
+
+        var esnaf = await db.Esnaflar.FindAsync(id);
+        if (esnaf is null) return NotFound();
+        if (esnaf.UyelikDurumu == dto.UyelikDurumu) return NoContent();
+
+        esnaf.UyelikDurumu = dto.UyelikDurumu;
+        // Durumun ne zaman değiştiği raporlarda aranıyor; elle girilmez, değişiklikle birlikte damgalanır.
+        esnaf.DurumDegisimTarihi = DateTime.UtcNow;
         await db.SaveChangesAsync();
         await canli.DegistiAsync("esnaf", esnaf.Id);
         return NoContent();

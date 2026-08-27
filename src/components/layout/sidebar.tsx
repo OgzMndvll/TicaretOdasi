@@ -18,7 +18,8 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
       <aside className={`sidebar ${open ? "open" : ""}`}>
         <button className="sidebar-close" onClick={onClose} aria-label="Menüyü kapat"><X size={20} /></button>
         <Link href="/" className="brand" aria-label="Erzurum Ticaret Odası ana sayfa">
-          <Image src={varlik("/etso.png")} alt="Erzurum Ticaret ve Sanayi Odası" width={450} height={90} priority />
+          {/* Amblemli beyaz sürüm: kenar çubuğu koyu olduğu için renk filtresi gerekmez. */}
+          <Image src={varlik("/etso-sidebar.png")} alt="Erzurum Ticaret ve Sanayi Odası" width={941} height={694} priority />
         </Link>
         <nav className="side-nav" aria-label="Ana navigasyon">
           {menu.map(({ label, href, icon: Icon }) => {

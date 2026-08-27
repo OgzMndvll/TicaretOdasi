@@ -76,7 +76,14 @@ export const api = {
   },
 };
 
-export interface IceAktarmaSonucu { eklenen: number; atlanan: number; hatalar: string[] }
+export interface IceAktarmaSonucu {
+  eklenen: number;
+  /** Zaten kayıtlı olup bu dosyayla en az bir alanı değişen kayıt sayısı. */
+  guncellenen: number;
+  /** Kayıtlı olup hiçbir alanı değişmeyen (ve kullanılamayan) satırlar. */
+  atlanan: number;
+  hatalar: string[];
+}
 
 // ---- Tipler ----
 
@@ -106,6 +113,8 @@ export interface EsnafKaydi {
   uyelikDurumu?: string | null; durumDegisimTarihi?: string | null; durumDegisimNedeni?: string | null;
   faaliyetDetayi?: string | null; naceKodu?: string | null; naceAdi?: string | null;
   yetkililer?: EsnafYetkilisi[];
+  /** Liste ucundan gelir: üyenin oda kaydındaki yetkili sayısı (detayda tam liste bulunur). */
+  yetkiliSayisi?: number;
 }
 
 export interface GrupKaydi {
