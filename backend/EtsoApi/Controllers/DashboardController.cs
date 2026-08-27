@@ -93,6 +93,8 @@ public class DashboardController(EtsoDbContext db) : ControllerBase
             onayVeren = Say("Onay Verdi"),
             onayVermeyen = Say("Onay Vermedi"),
             kararsiz = Say("Kararsız"),
+            takipEdilecek = Say("Takip Edilecek"),
+            gelmeyecek = Say("Gelmeyecek"),
             gorusulmemis,
             aralikGorusme = gunlukHam.Sum(g => g.Adet),
             baslangic = baslangicGunu.ToString("yyyy-MM-dd"),

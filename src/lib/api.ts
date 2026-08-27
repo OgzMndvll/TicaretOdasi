@@ -123,10 +123,17 @@ export interface GrupKaydi {
   esnafSayisi: number; aktifGorevli: number; durum: string; guncellemeTarihi: string;
 }
 
+/** Çalışanın sorumlu olduğu bir meslek grubu. `sira`, oda listesindeki "1./2./3. Üye" sütunudur. */
+export interface CalisanGrubu {
+  id: number; no?: number | null; ad: string; sira?: number | null;
+}
+
 export interface KullaniciKaydi {
   id: number; adSoyad: string; kullaniciAdi: string; rol: string;
   gorev?: string | null; birim?: string | null; eposta?: string | null;
   telefon?: string | null; durum: string;
+  /** Çalışanın bakmakla yükümlü olduğu meslek grupları. */
+  gruplar?: CalisanGrubu[];
 }
 
 export interface GorusmeKaydi {
@@ -150,7 +157,7 @@ export interface OnayKaydi {
 
 export interface DashboardOzet {
   toplamEsnaf: number; gorusulen: number; onayVeren: number; onayVermeyen: number;
-  kararsiz: number; gorusulmemis: number;
+  kararsiz: number; takipEdilecek: number; gelmeyecek: number; gorusulmemis: number;
   /** Seçili tarih aralığındaki görüşme sayısı. */
   aralikGorusme: number;
   baslangic: string; bitis: string;
@@ -164,7 +171,9 @@ export interface DashboardOzet {
 
 export interface GrupRaporSatiri {
   id: number; no?: number | null; ad: string; toplamEsnaf: number; gorusme: number;
-  onaylayan: number; reddedilen: number; kararsiz: number; gorusulmeyen: number; onayOrani: number;
+  onaylayan: number; reddedilen: number; kararsiz: number;
+  takipEdilecek: number; gelmeyecek: number;
+  gorusulmeyen: number; onayOrani: number;
 }
 
 export interface CalisanRaporSatiri {
@@ -174,6 +183,7 @@ export interface CalisanRaporSatiri {
   /** Kaç farklı üyeyle görüşüldüğü. */
   uyeSayisi: number;
   onayVerdi: number; onayVermedi: number; kararsiz: number;
+  takipEdilecek: number; gelmeyecek: number;
   /** Bu çalışanın görüşmesinde onay veren farklı üye sayısı. */
   onayliUyeSayisi: number;
   /** İkinci kişi olarak katıldığı görüşme sayısı; sayımlara dahil değildir. */
@@ -183,7 +193,10 @@ export interface CalisanRaporSatiri {
 
 export interface CalisanRaporu {
   satirlar: CalisanRaporSatiri[];
-  toplam: { calisan: number; gorusme: number; onayVerdi: number; onayVermedi: number; kararsiz: number };
+  toplam: {
+    calisan: number; gorusme: number; onayVerdi: number; onayVermedi: number; kararsiz: number;
+    takipEdilecek: number; gelmeyecek: number;
+  };
 }
 
 export interface CalisanGorusmeSatiri {
@@ -195,16 +208,29 @@ export interface CalisanGorusmeSatiri {
 
 // ---- Yardımcılar ----
 
-export type StatusTone = "success" | "danger" | "warning" | "neutral" | "info" | "gray";
+/** "brown" yalnızca "Gelmeyecek" içindir: kırmızı "Onay Vermedi" ile karışmasın diye ayrı tutuldu. */
+export type StatusTone = "success" | "danger" | "warning" | "neutral" | "info" | "gray" | "brown";
 
 export function durumTonu(durum: string): StatusTone {
   switch (durum) {
     case "Onay Verdi": case "Onaylandı": case "Aktif": case "Tamamlandı": case "Faal": return "success";
     case "Onay Vermedi": case "Reddedildi": case "İptal Edildi": return "danger";
+    case "Gelmeyecek": return "brown";
     case "Kararsız": case "Bekliyor": case "Bekleyen": case "Askı": return "warning";
+    case "Takip Edilecek": return "info";
     case "Görüşülmedi": case "Pasif": return "neutral";
     default: return "info";
   }
+}
+
+/**
+ * Meslek grubunun ekranda görünen adı. Oda grupları numarasıyla anılır ("13. Grup"),
+ * uzun sektör adları listelerde ve süzgeçlerde yazılmaz; kaydın tam adı Gruplar
+ * ekranındaki düzenleme formunda durur. Numarasız gruplar adıyla gösterilir.
+ */
+export function grupEtiketi(no?: number | null, ad?: string | null): string {
+  if (no) return `${no}. Grup`;
+  return ad?.trim() || "-";
 }
 
 export function tarihGoster(iso?: string | null): string {

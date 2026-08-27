@@ -234,7 +234,6 @@ select option:disabled{color:var(--muted)}
   height:clamp(76px,13vh,150px);object-fit:cover;object-position:center bottom;
   margin:0 -14px 12px;
 }
-.logout{flex:0 0 auto;margin-top:8px}
 
 /* ---- Silüet: kırpmasız, tam görünür ----
    object-fit:cover görselin üstünü/altını kesiyordu; artık doğal en-boy oranıyla
@@ -245,12 +244,10 @@ select option:disabled{color:var(--muted)}
   margin:0 -14px -22px;
 }
 
-/* Çıkış Yap: silüetin altında biraz daha aşağıda dursun */
-.logout{margin-top:18px;padding:10px 14px 4px}
 
 /* ---- Silüet: yapıştırılmış fotoğraf değil, arka plan dokusu ----
    İçerik akışından çıkarılıp sidebar'ın dibine dekoratif katman olarak yerleşir.
-   Menü ve çıkış butonu üstünde kalır; silüet gradyanın içine gömülür. */
+   Menü ve alttaki imza üstünde kalır; silüet gradyanın içine gömülür. */
 .sidebar{position:fixed}
 .sidebar-city{
   position:absolute;left:0;right:0;bottom:0;z-index:0;
@@ -266,8 +263,7 @@ select option:disabled{color:var(--muted)}
   mask-image:linear-gradient(180deg,transparent 0%,rgba(0,0,0,.35) 30%,rgba(0,0,0,.8) 65%,#000 100%);
 }
 /* İçerik silüetin üstünde kalsın */
-.brand,.side-nav,.logout,.sidebar-close{position:relative;z-index:1}
-.logout{margin-top:auto;padding:14px;margin-bottom:6px}
+.brand,.side-nav,.sidebar-ajans,.sidebar-close{position:relative;z-index:1}
 
 /* ── Özet kartları: 5 kart her zaman tek satırda ──────────────────────────────
    Önceki kurallar 1400px altında 3, 1000px altında 2 sütuna düşürüyordu. Sütun
@@ -583,26 +579,6 @@ tr.tiklanabilir:hover{background:#f4f8fd}
 .ozet-telefon:hover{background:#dbeaff;border-color:#9dc2f2}
 @media(max-width:700px){.form-grid.ozet-grid{grid-template-columns:1fr}}
 
-/* ── Canlı veri rozeti ────────────────────────────────────────────────────────
-   "Bu liste kendiliğinden mi tazeleniyor?" sorusunun tek yanıtı. Bağlantı koptuğunda
-   sessizce eski veri göstermek yerine durum açıkça belirtilir. */
-.canli-rozet{
-  display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;white-space:nowrap;
-  height:26px;padding:0 10px;border-radius:20px;font-size:10px;font-weight:700;
-  border:1px solid #c2e8d1;background:#edfaf2;color:#15703a;
-}
-.canli-rozet>i{width:7px;height:7px;border-radius:50%;background:#22a75a;box-shadow:0 0 0 3px rgba(34,167,90,.18)}
-.canli-rozet.bagli>i{animation:canli-nabiz 2.2s ease-in-out infinite}
-.canli-rozet.baglaniyor{border-color:#f6dbaa;background:#fff7e8;color:#9c5600}
-.canli-rozet.baglaniyor>i{background:#e79a12;box-shadow:0 0 0 3px rgba(231,154,18,.18);animation:canli-nabiz 1s ease-in-out infinite}
-.canli-rozet.kapali{border-color:#dbe1ea;background:#f4f6f9;color:#5d6b82}
-@keyframes canli-nabiz{0%,100%{opacity:1}50%{opacity:.3}}
-@media(prefers-reduced-motion:reduce){.canli-rozet>i{animation:none}}
-.table-view-toolbar .canli-rozet{margin-right:6px}
-.fullscreen-list-actions .canli-rozet{height:28px}
-/* Panel başlığının yanına rozet alabilmesi için. */
-.panel h2.baslik-satiri{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-@media(max-width:560px){.canli-rozet{font-size:9px;height:23px;padding:0 8px}}
 
 /* ---- Çalışan bazlı görüşme raporu (Raporlar sayfası) ---- */
 .calisan-raporu{margin-top:22px}
@@ -680,7 +656,6 @@ tr.satir-onayli .badge,tr.satir-red .badge,tr.satir-kararsiz .badge{box-shadow:0
   .brand img{width:calc(132px * var(--o))}
   .side-nav a{height:calc(50px * var(--o));gap:calc(14px * var(--o))}
   .side-nav a svg{width:calc(20px * var(--o));height:calc(20px * var(--o))}
-  .logout svg{width:calc(20px * var(--o));height:calc(20px * var(--o))}
   .sidebar-city b{font-size:calc(12.5px * var(--o));width:calc(150px * var(--o))}
   .sidebar-city small{font-size:calc(10px * var(--o))}
   /* Giriş ekranındaki logo da aynı sorundan etkileniyordu. */
@@ -689,7 +664,7 @@ tr.satir-onayli .badge,tr.satir-red .badge,tr.satir-kararsiz .badge{box-shadow:0
   .giris-kart h2{font-size:calc(27px * var(--o))}
 
   /* Üst bar */
-  .topbar{height:calc(60px * var(--o))}
+  .topbar{height:calc(72px * var(--o))}
   .icon-button{width:calc(38px * var(--o));height:calc(38px * var(--o))}
   .date-pill{height:calc(38px * var(--o))}
   .profile{min-width:calc(175px * var(--o));height:calc(44px * var(--o))}
@@ -725,7 +700,6 @@ tr.satir-onayli .badge,tr.satir-red .badge,tr.satir-kararsiz .badge{box-shadow:0
   .pagination{height:calc(57px * var(--o));font-size:calc(10px * var(--o))}
   .pagination button,.pagination select,.pagination>select{height:calc(30px * var(--o));min-width:calc(30px * var(--o))}
   .open-fullscreen-button{height:calc(34px * var(--o));font-size:calc(11px * var(--o))}
-  .canli-rozet{height:calc(26px * var(--o));font-size:calc(10px * var(--o))}
 
   /* Süzgeç çubuğu */
   .filter-card label>span,.filter-card .filter-select>span{font-size:calc(11px * var(--o))}
@@ -956,3 +930,120 @@ tr.satir-aski:hover,tr.tiklanabilir.satir-aski:hover{background:#9bc8f2}
 /* Renkli zeminde soluk gri alt metin okunmuyordu. */
 tr.satir-aski td small{color:#33455f}
 tr.satir-aski .badge{box-shadow:0 0 0 1px rgba(255,255,255,.75)}
+
+/* ── Kenar çubuğu imzası (eski "Çıkış Yap" düğmesinin yeri) ───────────────────
+   Oturum kapatma üst bardaki profil menüsüne taşındı; boşalan yere Ajans Orkestra
+   logosu yerleşti. Logo siyah çizimli olduğu için koyu lacivert zeminde görünmez:
+   brightness(0) tüm pikselleri siyaha indirger, invert(1) beyaza çevirir — böylece
+   şeffaflık korunarak tek renk beyaz bir sürüm elde edilir.
+
+   Logo çubuğun dibinde duruyor ve tam orada Erzurum silüeti en parlak hâlinde
+   (bkz. .sidebar-siluet maskesi). Beyaz logo bu açık zemine karışıp kayboluyordu;
+   bu yüzden kendi koyu levhasının üstüne oturtuldu: levha silüeti keser, logo
+   sabit bir zemin üzerinde tam opaklıkta durur. */
+.sidebar-ajans{
+  flex:0 0 auto;margin:auto 0 0;padding:12px 14px 13px;
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  position:relative;z-index:2;line-height:0;
+  border:1px solid rgba(255,255,255,.15);border-radius:11px;
+  background:linear-gradient(165deg,rgba(4,20,46,.82),rgba(2,12,30,.9));
+  box-shadow:0 8px 22px rgba(0,8,24,.45),inset 0 1px 0 rgba(255,255,255,.07);
+  transition:border-color .18s,box-shadow .18s,transform .18s;
+}
+.sidebar-ajans:hover{
+  border-color:rgba(120,175,255,.5);
+  box-shadow:0 10px 26px rgba(0,8,24,.55),inset 0 1px 0 rgba(255,255,255,.12);
+  transform:translateY(-1px);
+}
+/* Levhanın küçük üst başlığı: logonun neden orada olduğunu tek kelimeyle söyler. */
+.sidebar-ajans>b{
+  font-size:8.5px;font-weight:700;letter-spacing:2.4px;line-height:1;
+  color:#89aede;text-transform:uppercase;
+}
+.sidebar-ajans img{
+  width:140px;height:auto;display:block;
+  filter:brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0,0,0,.5));
+}
+
+/* ── Üst bardaki ortalanmış Maydanoz Asist logosu ─────────────────────────────
+   .topbar bir flex kabı ve sağdaki blok `margin-left:auto` ile itiliyor; akışa
+   bırakılan üçüncü bir çocuk, sol ve sağ blokların genişliği eşit olmadığı için
+   sayfanın ortasına denk gelmez. Bu yüzden mutlak konumlandırılır. */
+.topbar{position:relative;height:72px}
+.topbar-brand{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  display:flex;align-items:center;justify-content:center;
+  line-height:0;pointer-events:none;z-index:0;
+}
+/* Logonun içinde yaprak amblemi tam yüksekliği kaplarken "asist" yazısı ortada ve
+   görselin ancak üçte biri kadar; 30px'te yazı okunmuyordu. Üst bar da bu yüzden
+   biraz yükseltildi (aşağıda .topbar). */
+.topbar-brand img{display:block;width:auto;height:52px;object-fit:contain;pointer-events:auto}
+/* Sağdaki blok logonun üstünde boyansın. Bilerek `z-index` verilmiyor: sayısal bir değer
+   burada yeni bir yığın bağlamı açar ve içindeki profil menüsünü (z-index:90) hapsederdi.
+   Konumlandırılmış + z-index:auto olduğu için, DOM'da logodan sonra geldiğinden üstte kalır. */
+.topbar-actions{position:relative}
+
+@media(max-width:1100px){
+  .topbar-brand img{height:46px}
+}
+/* Dar ekranda tarih hapı + profil ortayı işgal ediyor; logo çakışmasın diye gizlenir. */
+@media(max-width:860px){.topbar-brand{display:none}}
+
+@media print{.topbar-brand{position:static;transform:none}}
+
+/* Tarayıcı yakınlaştırmasına göre ölçeklenen blokla (bkz. --o) uyum. */
+@media(min-width:1440px){
+  .sidebar-ajans img{width:calc(140px * var(--o))}
+  .sidebar-ajans>b{font-size:calc(8.5px * var(--o))}
+  .topbar-brand img{height:calc(52px * var(--o))}
+}
+
+/* ── Onay durumu kartları: "Takip Edilecek" ve "Gelmeyecek" eklendikten sonra ──
+   Üye ekranında toplam + 6 onay durumu (süzgeç etkinken + kapsam kartı) gösteriliyor.
+   Kart yüksekliği sabit olduğu için dar ekranlarda sütun sayısı kademeli düşer. */
+.stats-grid.seven{grid-template-columns:repeat(7,minmax(0,1fr))}
+.stats-grid.eight{grid-template-columns:repeat(8,minmax(0,1fr))}
+@media(max-width:1700px){.stats-grid.seven,.stats-grid.eight{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:1100px){.stats-grid.seven,.stats-grid.eight{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:860px){.stats-grid.seven,.stats-grid.eight{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.stats-grid.seven,.stats-grid.eight{grid-template-columns:1fr}}
+/* Sekiz kartta etiketler daralıyor; yazı boyu bir tık küçülür. */
+.stats-grid.seven .stat-card b,.stats-grid.eight .stat-card b{font-size:10.5px}
+
+/* Takip edilecek üye satırı: onaylı/red/kararsız tonlarından ayrışan açık mavi. */
+tr.satir-takip{background:#e8f1ff}
+tr.satir-takip>td:first-child{border-left:5px solid var(--blue)}
+tr.satir-takip:hover,tr.tiklanabilir.satir-takip:hover{background:#d6e6ff}
+
+/* Çalışan listesindeki meslek grubu sütunu: uzun adlar satırı şişirmesin. */
+.grup-hucresi{max-width:280px;overflow:hidden;text-overflow:ellipsis}
+
+/* Grafik göstergesindeki nokta renkleri: "red" hiç tanımlanmamıştı (Onay Vermeyen dilimi
+   renkli, göstergedeki noktası boştu). "brown" ise "Gelmeyecek" içindir; bkz. charts.tsx RENKLER. */
+.dot.red{background:#e84235}
+.dot.brown{background:#8a5a2b}
+
+/* Durum şeridinde "Takip Edilecek" çipi: mavi ton (diğer tonlar için bkz. .serit-cip). */
+.serit-cip.ton-blue{--ton:#0d6bf3;--ton-acik:#5ea1ff;--ton-zemin:#eef5ff;--ton-cizgi:#c4dbfb;--ton-yazi:#0a4fb4}
+
+/* ── "Gelmeyecek" sonucu: kahverengi ──────────────────────────────────────────
+   Kırmızı "Onay Vermedi" ile aynı zeminde durunca ikisi ayırt edilemiyordu;
+   gelmeyecek üyeler kendi ton ailesine alındı (rozet, satır, çip, kart, grafik). */
+.badge.brown{background:#f3ece3;color:#7a4e21}
+.stat-icon.brown{color:#8a5a2b;background:#f4ebe1}
+.serit-cip.ton-brown{--ton:#8a5a2b;--ton-acik:#b9834a;--ton-zemin:#f7f1e9;--ton-cizgi:#e3d2bd;--ton-yazi:#6b421a}
+tr.satir-gelmeyecek{background:#f0e5d8}
+tr.satir-gelmeyecek>td:first-child{border-left:5px solid #8a5a2b}
+tr.satir-gelmeyecek:hover,tr.tiklanabilir.satir-gelmeyecek:hover{background:#e6d7c4}
+tr.satir-gelmeyecek td small{color:#5a4630}
+tr.satir-gelmeyecek .badge{box-shadow:0 0 0 1px rgba(255,255,255,.7)}
+
+/* Askıdaki/pasif üyede "Yeni Görüşme" kilitli olduğunda sebebini yazan şerit. */
+.gorusme-engeli{
+  display:flex;align-items:center;gap:9px;margin:0 0 12px;
+  border:1px solid #f6dbaa;border-radius:7px;background:#fff7e8;color:#8a5a00;
+  padding:10px 12px;font-size:11px;line-height:1.5;
+}
+.gorusme-engeli>svg{flex:0 0 auto}
+.gorusme-bolumu .dark-button:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}

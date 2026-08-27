@@ -7,6 +7,7 @@ public class EtsoDbContext(DbContextOptions<EtsoDbContext> options) : DbContext(
 {
     public DbSet<Grup> Gruplar => Set<Grup>();
     public DbSet<Kullanici> Kullanicilar => Set<Kullanici>();
+    public DbSet<KullaniciGrup> KullaniciGruplari => Set<KullaniciGrup>();
     public DbSet<Esnaf> Esnaflar => Set<Esnaf>();
     public DbSet<EsnafYetkili> EsnafYetkilileri => Set<EsnafYetkili>();
     public DbSet<Gorusme> Gorusmeler => Set<Gorusme>();
@@ -39,6 +40,16 @@ public class EtsoDbContext(DbContextOptions<EtsoDbContext> options) : DbContext(
             e.Property(x => x.Telefon).HasMaxLength(30);
             e.Property(x => x.Durum).HasMaxLength(20);
             e.HasIndex(x => x.KullaniciAdi).IsUnique();
+        });
+
+        modelBuilder.Entity<KullaniciGrup>(e =>
+        {
+            // Aynı çalışan aynı gruba iki kez bağlanamaz; içe aktarma tekrarını da bu anahtar keser.
+            e.HasIndex(x => new { x.KullaniciId, x.GrupId }).IsUnique();
+            e.HasOne(x => x.Kullanici).WithMany(k => k.Gruplar)
+                .HasForeignKey(x => x.KullaniciId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Grup).WithMany(g => g.Calisanlar)
+                .HasForeignKey(x => x.GrupId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Esnaf>(e =>

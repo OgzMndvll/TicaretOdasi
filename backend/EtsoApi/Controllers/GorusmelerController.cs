@@ -10,6 +10,19 @@ namespace EtsoApi.Controllers;
 [Route("api/[controller]")]
 public class GorusmelerController(EtsoDbContext db, CanliBildirim canli) : ControllerBase
 {
+    /// <summary>
+    /// Görüşme sonucu seçenekleri. "Takip Edilecek" ve "Gelmeyecek", ayrı bir takip alanı
+    /// olmaktan çıkıp sonucun kendisine taşındı; üyenin onay durumu da bu listeden gelir.
+    /// </summary>
+    public static readonly string[] GecerliSonuclar =
+        ["Onay Verdi", "Onay Vermedi", "Kararsız", "Takip Edilecek", "Gelmeyecek"];
+
+    /// <summary>Takip bayrağı artık sonuçtan türetilir; forma ayrı bir alan olarak sorulmaz.</summary>
+    public const string TakipSonucu = "Takip Edilecek";
+
+    /// <summary>Görüşme yalnızca üyeliği faal olan üyelerle yapılabilir.</summary>
+    public const string GorusulebilirUyelik = "Faal";
+
     [HttpGet]
     public async Task<IActionResult> Listele(
         [FromQuery] int? esnafId, [FromQuery] int? gorevliId, [FromQuery] int? grupId, [FromQuery] string? sonuc,
@@ -100,6 +113,8 @@ public class GorusmelerController(EtsoDbContext db, CanliBildirim canli) : Contr
             onayVerdi = sonuclar.FirstOrDefault(s => s.Sonuc == "Onay Verdi")?.Adet ?? 0,
             onayVermedi = sonuclar.FirstOrDefault(s => s.Sonuc == "Onay Vermedi")?.Adet ?? 0,
             kararsiz = sonuclar.FirstOrDefault(s => s.Sonuc == "Kararsız")?.Adet ?? 0,
+            takipEdilecek = sonuclar.FirstOrDefault(s => s.Sonuc == "Takip Edilecek")?.Adet ?? 0,
+            gelmeyecek = sonuclar.FirstOrDefault(s => s.Sonuc == "Gelmeyecek")?.Adet ?? 0,
             aylik, gorevliPerformans,
         });
     }
@@ -111,6 +126,17 @@ public class GorusmelerController(EtsoDbContext db, CanliBildirim canli) : Contr
 
         var esnaf = await db.Esnaflar.FindAsync(dto.EsnafId);
         if (esnaf is null) return BadRequest(new { mesaj = "Üye bulunamadı." });
+
+        // Askıdaki (ve pasif) üyelerle görüşme kaydı açılamaz. Var olan görüşmeler düzenlenebilir:
+        // üye sonradan askıya alındığında geçmiş kayıtlar düzeltilemez hâle gelmemeli.
+        if (esnaf.UyelikDurumu != GorusulebilirUyelik)
+            return BadRequest(new
+            {
+                mesaj = $"\"{esnaf.Isletme}\" üyeliği \"{esnaf.UyelikDurumu}\" durumunda. " +
+                        "Görüşme yalnızca üyeliği faal olan üyelerle yapılabilir; önce üyelik durumunu " +
+                        "\"Faal\" olarak güncelleyin.",
+            });
+
         if (!await db.Kullanicilar.AnyAsync(k => k.Id == gorevliId))
             return BadRequest(new { mesaj = "Görevli bulunamadı." });
 
@@ -124,16 +150,21 @@ public class GorusmelerController(EtsoDbContext db, CanliBildirim canli) : Contr
         if (sira < 1 || sira > mevcutSayi + 1)
             return BadRequest(new { mesaj = $"Görüşme sırası 1 ile {mevcutSayi + 1} arasında olmalıdır." });
 
+        var sonuc = string.IsNullOrWhiteSpace(dto.Sonuc) ? "Kararsız" : dto.Sonuc.Trim();
+        if (!GecerliSonuclar.Contains(sonuc))
+            return BadRequest(new { mesaj = $"Geçersiz görüşme sonucu. Geçerli değerler: {string.Join(", ", GecerliSonuclar)}" });
+
         var gorusme = new Gorusme
         {
             EsnafId = dto.EsnafId,
             GorevliId = gorevliId,
             IkinciGorevliId = dto.IkinciGorevliId,
             Sira = sira,
-            Tarih = dto.Tarih == default ? DateTime.UtcNow : dto.Tarih,
-            Sonuc = string.IsNullOrWhiteSpace(dto.Sonuc) ? "Kararsız" : dto.Sonuc,
+            Tarih = dto.Tarih is null or { Ticks: 0 } ? DateTime.UtcNow : dto.Tarih.Value,
+            Sonuc = sonuc,
             Not = dto.Not,
-            TakipGerekli = dto.TakipGerekli,
+            // Takip bayrağı sonuçtan türetilir (bkz. TakipSonucu).
+            TakipGerekli = sonuc == TakipSonucu,
         };
         db.Gorusmeler.Add(gorusme);
 
@@ -170,12 +201,19 @@ public class GorusmelerController(EtsoDbContext db, CanliBildirim canli) : Contr
             gorusme.Sira = dto.Sira.Value;
         }
 
+        if (!string.IsNullOrWhiteSpace(dto.Sonuc))
+        {
+            var yeniSonuc = dto.Sonuc.Trim();
+            if (!GecerliSonuclar.Contains(yeniSonuc))
+                return BadRequest(new { mesaj = $"Geçersiz görüşme sonucu. Geçerli değerler: {string.Join(", ", GecerliSonuclar)}" });
+            gorusme.Sonuc = yeniSonuc;
+        }
+
         gorusme.GorevliId = dto.GorevliId;
         gorusme.IkinciGorevliId = dto.IkinciGorevliId;
-        if (dto.Tarih != default) gorusme.Tarih = dto.Tarih;
-        if (!string.IsNullOrWhiteSpace(dto.Sonuc)) gorusme.Sonuc = dto.Sonuc;
+        if (dto.Tarih is not (null or { Ticks: 0 })) gorusme.Tarih = dto.Tarih.Value;
         gorusme.Not = dto.Not;
-        gorusme.TakipGerekli = dto.TakipGerekli;
+        gorusme.TakipGerekli = gorusme.Sonuc == TakipSonucu;
         await db.SaveChangesAsync();
         await EsnafDurumunuEsitle(gorusme.EsnafId);
         await canli.DegistiAsync("gorusme", gorusme.Id);

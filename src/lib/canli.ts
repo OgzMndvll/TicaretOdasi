@@ -1,6 +1,6 @@
 "use client";
 
-import { HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from "@microsoft/signalr";
+import { HubConnection, HubConnectionBuilder, HubConnectionState, HttpTransportType, LogLevel } from "@microsoft/signalr";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { API_URL } from "./api";
 import { tokenAl } from "./auth";
@@ -41,6 +41,8 @@ function baglantiyiKur(): HubConnection {
       accessTokenFactory: () => tokenAl() ?? "",
       // Oturum çerezle değil jetonla taşınıyor; çerez göndermeye gerek yok.
       withCredentials: false,
+      // Yerel aynı-kaynak proxy'sinde WebSocket yükseltmesi yerine güvenilir HTTP uzun yoklama kullanılır.
+      ...(API_URL.startsWith("/") ? { transport: HttpTransportType.LongPolling } : {}),
     })
     // Kopmada artan aralıklarla yeniden dener; ağ dalgalanmasında kullanıcı hiçbir şey yapmaz.
     .withAutomaticReconnect([0, 2000, 5000, 10000, 20000, 30000])

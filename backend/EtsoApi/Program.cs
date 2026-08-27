@@ -180,6 +180,32 @@ using (var scope = app.Services.CreateScope())
         return 0;
     }
 
+    // Aktif çalışan / meslek grubu listesi: "dotnet run -- calisan-ice-aktar <ETSO_GRUPLAR.xlsx>".
+    // Panelin "İçe Aktar" düğmesiyle aynı servisi kullanır; oturum açmadan çalıştırılabilsin diye
+    // ayrıca komut olarak da sunulur (bkz. GrupCalisanIceAktarmaServisi).
+    if (args.Length >= 2 && args[0] == "calisan-ice-aktar")
+    {
+        var yol = args[1];
+        if (!File.Exists(yol))
+        {
+            Console.Error.WriteLine($"Dosya bulunamadı: {yol}");
+            return 1;
+        }
+        await using var akis = File.OpenRead(yol);
+        var satirlar = ExcelServisi.Oku(akis);
+        if (!GrupCalisanIceAktarmaServisi.DosyaBuDuzendeMi(satirlar))
+        {
+            Console.Error.WriteLine("Dosya, grup listesi düzeninde değil ('1. Üye' ve 'Grup' sütunları bulunamadı).");
+            return 1;
+        }
+        Console.WriteLine($"{satirlar.Count} grup satırı okundu, aktarılıyor...");
+        var sonuc = await GrupCalisanIceAktarmaServisi.AktarAsync(db, satirlar);
+        Console.WriteLine($"Eklenen: {sonuc.Eklenen}  Güncellenen: {sonuc.Guncellenen}  " +
+                          $"Atlanan: {sonuc.Atlanan}  Uyarı: {sonuc.Hatalar.Count}");
+        foreach (var hata in sonuc.Hatalar) Console.WriteLine("  ! " + hata);
+        return 0;
+    }
+
     // Ana üye listesini güvenli biçimde değiştirir: önce mevcut üyeler ve ilişkili kayıtlar
     // JSON yedeğine alınır, sonra kaynak dosyadaki grup kapsamı ve üyeler tek transaction'da kurulur.
     // Kullanım: dotnet run -- uye-listesini-degistir <dosya.xlsx> <yedek.json>
@@ -313,15 +339,18 @@ using (var scope = app.Services.CreateScope())
         await db.SaveChangesAsync();
     }
 
-    // Şifresi olmayan kullanıcılara başlangıç şifresi atanır.
-    // Sabit parola kaynak koda yazılmaz; temiz kurulumda giriş yapılacak hesap config/env ile belirlenir.
+    // Yalnızca panele giriş yapabilen yönetici hesaplarına başlangıç şifresi atanır.
+    // Çalışan kayıtları oturum açamaz; onlar için pahalı parola özeti üretmek API başlangıcını
+    // kullanıcı sayısıyla birlikte gereksiz yere yavaşlatır.
     var baslangicSifreleri = new Dictionary<string, string>
         {
             [yoneticiKullaniciAdi] = builder.Configuration["Bootstrap:AdminPassword"] ?? string.Empty,
         }
         .Where(x => !string.IsNullOrWhiteSpace(x.Value))
         .ToDictionary(x => x.Key, x => x.Value);
-    var sifresizler = await db.Kullanicilar.Where(k => k.SifreHash == null).ToListAsync();
+    var sifresizler = await db.Kullanicilar
+        .Where(k => k.SifreHash == null && k.Rol == "Yönetici")
+        .ToListAsync();
     foreach (var kullanici in sifresizler)
     {
         var sifre = baslangicSifreleri.GetValueOrDefault(kullanici.KullaniciAdi)

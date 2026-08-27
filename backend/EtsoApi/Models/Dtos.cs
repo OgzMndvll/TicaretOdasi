@@ -18,11 +18,18 @@ public record GrupYazDto(string Ad, string? Aciklama, string? Tur, int? UstGrupI
 
 public record KullaniciYazDto(
     string AdSoyad, string KullaniciAdi, string Rol, string? Gorev,
-    string? Birim, string? Eposta, string? Telefon, string? Durum, string? Sifre = null);
+    string? Birim, string? Eposta, string? Telefon, string? Durum, string? Sifre = null,
+    /// <summary>Çalışanın sorumlu olduğu meslek grupları. Gönderilen liste kaydın tam
+    /// karşılığıdır: listede olmayan bağlar silinir. Alan hiç gönderilmezse (null) mevcut
+    /// bağlara dokunulmaz — böylece grup alanını taşımayan eski istemciler bağları silmez.</summary>
+    int[]? GrupIdler = null);
 
 public record SifreSifirlaDto(string YeniSifre);
 
-public record GorusmeYazDto(int EsnafId, int GorevliId, DateTime Tarih, string Sonuc, string? Not, bool TakipGerekli,
+public record GorusmeYazDto(int EsnafId, int GorevliId,
+    /// <summary>Görüşme tarihi. Zorunlu değildir: boş gelirse yeni kayıtta bugünün tarihi
+    /// yazılır, güncellemede kaydın mevcut tarihi korunur.</summary>
+    DateTime? Tarih, string Sonuc, string? Not, bool TakipGerekli,
     /// <summary>Üyeyle kaçıncı görüşme. Boş bırakılırsa sunucu sıradaki numarayı verir.</summary>
     int? Sira = null,
     /// <summary>Görüşmeye eşlik eden ikinci çalışan. İsteğe bağlı; birincil görevliyle aynı olamaz.</summary>

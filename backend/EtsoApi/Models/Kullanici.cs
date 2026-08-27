@@ -19,6 +19,14 @@ public class Kullanici
     public string Durum { get; set; } = "Aktif";
     public DateTime OlusturmaTarihi { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// Çalışanın sorumlu olduğu meslek grupları. Gezinme özelliği API yanıtlarına doğrudan
+    /// çıkmaz (yükleme yapılmadığında boş dizi görünüp yanıltırdı); uçlar bu listeyi
+    /// açıkça projeksiyonla döndürür.
+    /// </summary>
+    [JsonIgnore]
+    public List<KullaniciGrup> Gruplar { get; set; } = [];
+
     /// <summary>PBKDF2 (ASP.NET Identity PasswordHasher) ile üretilen şifre özeti. API yanıtlarına asla dahil edilmez.</summary>
     [JsonIgnore]
     public string? SifreHash { get; set; }

@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { CalendarDays, ChevronDown, LogOut, Menu, Settings } from "lucide-react";
 import { cikisYap, kimlik } from "@/lib/auth";
+import { varlik } from "@/lib/yol";
 
 export function Topbar({ onMenu }: { onMenu: () => void }) {
   const router = useRouter();
@@ -33,6 +35,14 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
   return (
     <header className="topbar">
       <button className="icon-button menu-button" onClick={onMenu} aria-label="Menüyü aç"><Menu size={24} /></button>
+      {/* Sayfanın tam ortasındaki imza. Üst barın sol (menü) ve sağ (tarih + profil) blokları
+          farklı genişlikte olduğu için akışa bırakılırsa ortalanmaz; mutlak konumla sayfanın
+          gerçek ortasına oturtulur ve altındaki düğmelere tıklamayı engellemesin diye
+          pointer-events dışarıda bırakılır (bağlantının kendisi geri açılır). */}
+      <a className="topbar-brand" href="https://maydanozasist.com" target="_blank" rel="noopener noreferrer"
+        aria-label="Maydanoz Asist">
+        <Image src={varlik("/footer-maydanoz.png")} alt="Maydanoz Asist" width={956} height={350} priority />
+      </a>
       <div className="topbar-actions">
         <button className="date-pill" title="Bugünün tarihi"><CalendarDays size={17} /><span>{bugun}</span></button>
         <div className="profile-menu-wrap" ref={profilRef}>

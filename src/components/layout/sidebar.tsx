@@ -3,9 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, X } from "lucide-react";
+import { X } from "lucide-react";
 import { navigation } from "@/lib/navigation";
-import { cikisYap } from "@/lib/auth";
 import { varlik } from "@/lib/yol";
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -30,7 +29,15 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         <div className="sidebar-city" aria-hidden="true">
           <Image src={varlik("/erzurum-silueti.png")} alt="" width={768} height={512} className="sidebar-siluet" />
         </div>
-        <button className="logout" onClick={cikisYap}><LogOut size={20} /> Çıkış Yap</button>
+        {/* Kenar çubuğunun dibindeki imza. "Çıkış Yap" düğmesinin yerini aldı; oturum kapatma
+            üst bardaki profil menüsünde duruyor. Logonun kendisi siyah olduğu için koyu lacivert
+            zeminde görünmez; CSS'te brightness/invert ile beyaza çevrilir ve alttaki Erzurum
+            silüetine karışmasın diye kendi koyu levhasının üstüne oturtulur. */}
+        <a className="sidebar-ajans" href="https://ajansorkestra.com.tr" target="_blank" rel="noopener noreferrer"
+          aria-label="Ajans Orkestra — yeni sekmede açılır">
+          <b>Hazırlayan</b>
+          <Image src={varlik("/sidebar-ajans.png")} alt="Ajans Orkestra" width={940} height={94} />
+        </a>
       </aside>
     </>
   );

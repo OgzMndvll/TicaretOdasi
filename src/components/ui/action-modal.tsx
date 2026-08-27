@@ -2,15 +2,17 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
+import { CokluSecim } from "./coklu-secim";
 import { EsnafSecici } from "./esnaf-secici";
 import { FormField, Modal } from "./modal";
-import { api, ApiError, GrupKaydi, KullaniciKaydi } from "@/lib/api";
+import { api, ApiError, grupEtiketi, GrupKaydi, KullaniciKaydi } from "@/lib/api";
 import { ILLER, ilceleriGetir } from "@/lib/il-ilce";
 
 type Alan = {
   name: string;
   label: string;
-  tip: "text" | "email" | "date" | "textarea" | "select" | "hidden" | "password" | "tel";
+  /** "coklu" = onay kutulu çoklu seçim; değer virgülle ayrılmış tek bir gizli girdide taşınır. */
+  tip: "text" | "email" | "date" | "textarea" | "select" | "coklu" | "hidden" | "password" | "tel";
   zorunlu?: boolean;
   secenekKaynagi?: "gruplar" | "gorevliler" | "esnaflar" | "sabit" | "iller" | "ilceler" | "gorusmeSirasi";
   sabitSecenekler?: string[];
@@ -20,13 +22,16 @@ type Alan = {
 const TELEFON_UZUNLUK = 11;
 const telefonTemizle = (deger: string) => deger.replace(/\D/g, "").slice(0, TELEFON_UZUNLUK);
 
-const ESNAF_DURUMLARI = ["Onay Verdi", "Onay Vermedi", "Kararsız", "Görüşülmedi"];
+/**
+ * Görüşme sonucu seçenekleri. "Takip Edilecek" ve "Gelmeyecek" ayrı bir "takip durumu"
+ * alanı olmaktan çıkıp sonucun kendisine taşındı; sunucu `TakipGerekli` bayrağını bu
+ * değerden türetir (bkz. GorusmelerController.TakipSonucu).
+ */
+export const GORUSME_SONUCLARI = ["Onay Verdi", "Onay Vermedi", "Kararsız", "Takip Edilecek", "Gelmeyecek"];
+/** Üyenin onay durumu: görüşme sonuçları + hiç görüşülmemiş üyeler. */
+const ESNAF_DURUMLARI = [...GORUSME_SONUCLARI, "Görüşülmedi"];
 // Odadaki üyelik durumu (kaynak raporun "DURUM TANIMI" kolonu). Görüşme onay durumundan ayrıdır.
 const UYELIK_DURUMLARI = ["Faal", "Askı", "Pasif"];
-// Görüşme sonrası izlenecek yol. Kayıtta `TakipGerekli` (bool) alanında tutulur:
-// "Takip Edilecek" = true, "Gelmeyecek" = false. Eski "Evet/Hayır" etiketleri bunlarla değiştirildi.
-const TAKIP_SECENEKLERI = ["Takip Edilecek", "Gelmeyecek"];
-const TAKIP_EDILECEK = TAKIP_SECENEKLERI[0];
 
 /** `gonder`, isteğe bağlı olarak kendi başarı mesajını döndürebilir (ör. sunucunun türettiği kullanıcı adı). */
 type FormTanimi = { alanlar: Alan[]; buton: string; gonder: (v: Record<string, string>) => Promise<string | void> };
@@ -83,6 +88,8 @@ const kullaniciAlanlari: Alan[] = [
   { name: "rol", label: "Rol (Görevli = yalnızca çalışan kaydı, panele giremez)", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Görevli", "Yönetici"], zorunlu: true },
   { name: "gorev", label: "Görev", tip: "text" },
   { name: "birim", label: "Birim", tip: "text" },
+  // Odanın grup listesinde bir kişi birden çok gruba bakabildiği için çoklu seçim.
+  { name: "grupIdler", label: "Sorumlu Olduğu Meslek Grupları", tip: "coklu", secenekKaynagi: "gruplar" },
 ];
 
 function kullaniciGovdesi(v: Record<string, string>) {
@@ -90,6 +97,8 @@ function kullaniciGovdesi(v: Record<string, string>) {
     adSoyad: v.adSoyad, kullaniciAdi: v.kullaniciAdi ?? "", rol: v.rol,
     gorev: v.gorev || null, birim: v.birim || null, eposta: v.eposta || null, telefon: v.telefon || null,
     durum: v.durum || null, sifre: v.sifre || null,
+    // Gönderilen liste kaydın tam karşılığıdır; boş dizi "grubu kalmadı" demektir.
+    grupIdler: (v.grupIdler ?? "").split(",").filter(Boolean).map(Number),
   };
 }
 
@@ -105,9 +114,8 @@ export const formlar: Record<string, FormTanimi> = {
       { name: "sira", label: "Kaçıncı Görüşme", tip: "select", secenekKaynagi: "gorusmeSirasi", zorunlu: true },
       { name: "gorevliId", label: "Görüşen Aktif Çalışan", tip: "select", secenekKaynagi: "gorevliler", zorunlu: true },
       { name: "ikinciGorevliId", label: "Görüşecek Kişi (isteğe bağlı ikinci çalışan)", tip: "select", secenekKaynagi: "gorevliler" },
-      { name: "tarih", label: "Görüşme Tarihi", tip: "date", zorunlu: true },
-      { name: "sonuc", label: "Görüşme Sonucu", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Onay Verdi", "Onay Vermedi", "Kararsız"], zorunlu: true },
-      { name: "takipGerekli", label: "Görüşme Sonrası Takip Durumu", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: TAKIP_SECENEKLERI, zorunlu: true },
+      { name: "tarih", label: "Görüşme Tarihi (boş bırakılırsa bugün)", tip: "date" },
+      { name: "sonuc", label: "Görüşme Sonucu", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: GORUSME_SONUCLARI, zorunlu: true },
       { name: "not", label: "Not / Yorum", tip: "textarea" },
     ],
     buton: "Görüşmeyi Kaydet",
@@ -115,16 +123,15 @@ export const formlar: Record<string, FormTanimi> = {
       await api.post("/api/gorusmeler", {
         esnafId: Number(v.esnafId), gorevliId: v.gorevliId ? Number(v.gorevliId) : 0,
         ikinciGorevliId: v.ikinciGorevliId ? Number(v.ikinciGorevliId) : null,
-        tarih: v.tarih, sonuc: v.sonuc, not: v.not || null,
-        // Takip durumu sunucuda bool tutulur: "Takip Edilecek" = true, "Gelmeyecek" = false.
-        takipGerekli: v.takipGerekli === TAKIP_EDILECEK,
+        // Takip bayrağını sunucu sonuçtan türetir; forma ayrı bir alan olarak sorulmaz.
+        tarih: v.tarih || null, sonuc: v.sonuc, not: v.not || null, takipGerekli: false,
         sira: v.sira ? Number(v.sira) : null,
       });
     },
   },
   "Yeni Grup Ekle": {
     alanlar: [
-      { name: "no", label: "Meslek Grubu No", tip: "text" },
+      { name: "no", label: "Meslek Grubu No (gruplar listelerde \"5. Grup\" gibi görünür)", tip: "text", zorunlu: true },
       { name: "ad", label: "Grup Adı", tip: "text", zorunlu: true },
       { name: "tur", label: "Grup Türü", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Sektörel", "Bölgesel", "Özel"], zorunlu: true },
       { name: "ustGrupId", label: "Üst Grup", tip: "select", secenekKaynagi: "gruplar" },
@@ -170,7 +177,7 @@ export const duzenlemeFormlari: Record<string, DuzenlemeTanimi> = {
   },
   grup: {
     alanlar: [
-      { name: "no", label: "Meslek Grubu No", tip: "text" },
+      { name: "no", label: "Meslek Grubu No (gruplar listelerde \"5. Grup\" gibi görünür)", tip: "text", zorunlu: true },
       { name: "ad", label: "Grup Adı", tip: "text", zorunlu: true },
       { name: "tur", label: "Grup Türü", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Sektörel", "Bölgesel", "Özel"], zorunlu: true },
       { name: "ustGrupId", label: "Üst Grup", tip: "select", secenekKaynagi: "gruplar" },
@@ -198,9 +205,8 @@ export const duzenlemeFormlari: Record<string, DuzenlemeTanimi> = {
       { name: "sira", label: "Kaçıncı Görüşme", tip: "select", secenekKaynagi: "gorusmeSirasi", zorunlu: true },
       { name: "gorevliId", label: "Görüşen Aktif Çalışan", tip: "select", secenekKaynagi: "gorevliler", zorunlu: true },
       { name: "ikinciGorevliId", label: "Görüşecek Kişi (isteğe bağlı ikinci çalışan)", tip: "select", secenekKaynagi: "gorevliler" },
-      { name: "tarih", label: "Görüşme Tarihi", tip: "date", zorunlu: true },
-      { name: "sonuc", label: "Görüşme Sonucu", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ["Onay Verdi", "Onay Vermedi", "Kararsız"], zorunlu: true },
-      { name: "takipGerekli", label: "Görüşme Sonrası Takip Durumu", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: TAKIP_SECENEKLERI, zorunlu: true },
+      { name: "tarih", label: "Görüşme Tarihi (boş bırakılırsa bugün)", tip: "date" },
+      { name: "sonuc", label: "Görüşme Sonucu", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: GORUSME_SONUCLARI, zorunlu: true },
       { name: "not", label: "Not / Yorum", tip: "textarea" },
       { name: "esnafId", label: "", tip: "hidden" },
     ],
@@ -208,7 +214,7 @@ export const duzenlemeFormlari: Record<string, DuzenlemeTanimi> = {
     gonder: (id, v) => api.put(`/api/gorusmeler/${id}`, {
       esnafId: Number(v.esnafId), gorevliId: v.gorevliId ? Number(v.gorevliId) : 0,
       ikinciGorevliId: v.ikinciGorevliId ? Number(v.ikinciGorevliId) : null,
-      tarih: v.tarih, sonuc: v.sonuc, not: v.not || null, takipGerekli: v.takipGerekli === TAKIP_EDILECEK,
+      tarih: v.tarih || null, sonuc: v.sonuc, not: v.not || null, takipGerekli: false,
       sira: v.sira ? Number(v.sira) : null,
     }),
   },
@@ -231,6 +237,9 @@ export function ActionModal({ action, duzenleme, open, onClose, onSuccess, onSav
   // Görüşme sırası seçilen üyenin mevcut görüşme sayısına bağlıdır; üye seçilince yeniden hesaplanır.
   const [secilenEsnafId, setSecilenEsnafId] = useState("");
   const [gorusmeSayisi, setGorusmeSayisi] = useState<number | null>(null);
+  // Çoklu seçim alanları (ör. meslek grupları) denetimli bileşendir; değer virgülle ayrılmış
+  // tek bir gizli girdide taşınır, çünkü FormData çok değerli bir alanın yalnızca sonuncusunu tutar.
+  const [cokluDegerler, setCokluDegerler] = useState<Record<string, string>>({});
 
   const form: FormTanimi | DuzenlemeTanimi | undefined = duzenleme ? duzenlemeFormlari[duzenleme.form] : formlar[action];
   const baslik = duzenleme ? duzenleme.baslik : action;
@@ -243,6 +252,10 @@ export function ActionModal({ action, duzenleme, open, onClose, onSuccess, onSav
     setSecilenIl(duzenleme?.degerler.il ?? "");
     setSecilenEsnafId(duzenleme?.degerler.esnafId ?? onDoldurma?.esnafId ?? "");
     setGorusmeSayisi(null);
+    const baslangic = duzenleme?.degerler ?? onDoldurma ?? {};
+    setCokluDegerler(Object.fromEntries(form.alanlar
+      .filter(a => a.tip === "coklu")
+      .map(a => [a.name, baslangic[a.name] ?? ""])));
     const kaynaklar = new Set(form.alanlar.map(a => a.secenekKaynagi).filter(Boolean));
     if (kaynaklar.has("gruplar")) api.get<GrupKaydi[]>("/api/gruplar").then(setGruplar).catch(() => setGruplar([]));
     if (kaynaklar.has("gorevliler")) api.get<KullaniciKaydi[]>("/api/kullanicilar?durum=Aktif").then(setGorevliler).catch(() => setGorevliler([]));
@@ -268,7 +281,7 @@ export function ActionModal({ action, duzenleme, open, onClose, onSuccess, onSav
 
   function secenekler(alan: Alan): { deger: string; etiket: string }[] {
     switch (alan.secenekKaynagi) {
-      case "gruplar": return gruplar.map(g => ({ deger: String(g.id), etiket: g.no ? `${g.no}. ${g.ad}` : g.ad }));
+      case "gruplar": return gruplar.map(g => ({ deger: String(g.id), etiket: grupEtiketi(g.no, g.ad) }));
       case "gorevliler": {
         const liste = gorevliler.map(k => ({ deger: String(k.id), etiket: k.adSoyad }));
         // Liste yalnızca aktif çalışanları getirir. Kayıttaki kişi pasife alınmışsa seçenek
@@ -333,9 +346,18 @@ export function ActionModal({ action, duzenleme, open, onClose, onSuccess, onSav
       <div className="form-grid">
         {gosterilecekAlanlar.map((alan, index) => alan.tip === "hidden"
           ? <input key={alan.name} type="hidden" name={alan.name} defaultValue={degerler[alan.name] ?? ""} />
-          : <FormField key={alan.name} label={alan.label} genis={alan.secenekKaynagi === "esnaflar"}>
-            {alan.secenekKaynagi === "esnaflar"
-              ? <EsnafSecici name={alan.name} required={alan.zorunlu} sadeceGorevlendirilmis={kisitli}
+          : <FormField key={alan.name} label={alan.label} genis={alan.secenekKaynagi === "esnaflar" || alan.tip === "coklu"}>
+            {alan.tip === "coklu"
+              ? <>
+                  <CokluSecim label={alan.label} options={secenekler(alan)}
+                    value={cokluDegerler[alan.name] ?? ""}
+                    onChange={deger => setCokluDegerler(d => ({ ...d, [alan.name]: deger }))} />
+                  <input type="hidden" name={alan.name} value={cokluDegerler[alan.name] ?? ""} readOnly />
+                </>
+              : alan.secenekKaynagi === "esnaflar"
+              // Üye seçici yalnızca görüşme formunda kullanılıyor; görüşme de yalnızca
+              // üyeliği faal olanlarla yapılabildiği için liste buna göre süzülür.
+              ? <EsnafSecici name={alan.name} required={alan.zorunlu} sadeceGorevlendirilmis={kisitli} sadeceFaal
                   defaultId={degerler[alan.name] || undefined} defaultEtiket={degerler[`${alan.name}Etiket`] || undefined}
                   onSecim={setSecilenEsnafId} />
               : alan.tip === "textarea" ? <textarea name={alan.name} required={alan.zorunlu} maxLength={500} placeholder={`${alan.label} giriniz`} defaultValue={degerler[alan.name] ?? ""} />

@@ -1,10 +1,9 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, CircleHelp, Clock3, CloudDownload, CloudUpload, Eye, ListFilter, Maximize2, MessageSquareText, Minimize2, Pencil, ShieldCheck, Store, Trash2, UserRound, UsersRound, XCircle } from "lucide-react";
+import { CalendarClock, CheckCircle2, CircleHelp, CircleSlash, Clock3, CloudDownload, CloudUpload, Eye, ListFilter, Maximize2, MessageSquareText, Minimize2, Pencil, ShieldCheck, Store, Trash2, UserRound, UsersRound, XCircle } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { ActionModal, DuzenlemeIstegi } from "@/components/ui/action-modal";
-import { CanliRozet } from "@/components/ui/canli-rozet";
+import { ActionModal, DuzenlemeIstegi, GORUSME_SONUCLARI } from "@/components/ui/action-modal";
 import { BarList, DonutChart, DonutSegment } from "@/components/ui/charts";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { DetailModal, DetayGorusme, DetaySatiri } from "@/components/ui/detail-modal";
@@ -14,14 +13,14 @@ import { Modal } from "@/components/ui/modal";
 import { StatCard } from "@/components/ui/stat-card";
 import { Toast } from "@/components/ui/toast";
 import {
-  api, ApiError, API_ERISIM_HATASI, durumTonu, sayiGoster, tarihGoster, yuzde,
+  api, ApiError, API_ERISIM_HATASI, durumTonu, grupEtiketi, sayiGoster, tarihGoster, yuzde,
   EsnafKaydi, EsnafYetkilisi, GorusmeKaydi, GrupKaydi, KullaniciKaydi, OnayKaydi, Sayfali,
 } from "@/lib/api";
 import { kimlik, yoneticiMi } from "@/lib/auth";
 import { CanliOlay, useCanliVeri } from "@/lib/canli";
 
-/** Üyenin görüşme sonucundan gelen onay durumu. */
-const ESNAF_ONAY_DURUMLARI = ["Onay Verdi", "Onay Vermedi", "Kararsız", "Görüşülmedi"];
+/** Üyenin görüşme sonucundan gelen onay durumu: görüşme sonuçları + hiç görüşülmemişler. */
+const ESNAF_ONAY_DURUMLARI = [...GORUSME_SONUCLARI, "Görüşülmedi"];
 
 type PageKind = "esnaflar" | "onaylar" | "gruplar" | "calisanlar";
 
@@ -35,6 +34,8 @@ const config: Record<PageKind, { title: string; action: string; tabs: { etiket: 
       { etiket: "Onay Veren", filtre: { durum: "Onay Verdi" } },
       { etiket: "Onay Vermeyen", filtre: { durum: "Onay Vermedi" } },
       { etiket: "Kararsız", filtre: { durum: "Kararsız" } },
+      { etiket: "Takip Edilecek", filtre: { durum: "Takip Edilecek" } },
+      { etiket: "Gelmeyecek", filtre: { durum: "Gelmeyecek" } },
       { etiket: "Görüşülmemiş", filtre: { durum: "Görüşülmedi" } },
     ],
   },
@@ -97,6 +98,22 @@ function tarihGirdisi(iso?: string | null): string {
   return iso ? iso.slice(0, 10) : "";
 }
 
+/**
+ * Görüşme yalnızca üyeliği "Faal" olan üyelerle yapılabilir; askıya alınmış ya da pasif
+ * üyeler için sebebini döndürür (boşsa engel yok). Aynı kural sunucuda da uygulanır
+ * (bkz. GorusmelerController.GorusulebilirUyelik).
+ */
+function gorusmeEngeli(uyelikDurumu?: string | null): string | undefined {
+  if (!uyelikDurumu || uyelikDurumu === "Faal") return undefined;
+  return `Üyelik "${uyelikDurumu}" durumunda olduğu için yeni görüşme eklenemez. `
+    + "Görüşme yapabilmek için önce yukarıdaki \"Düzenle\" ile üyelik durumunu \"Faal\" yapın.";
+}
+
+/** Çalışanın meslek gruplarını "12. SIHHİ TESİSAT…" biçiminde tek metne çevirir. */
+function gruplariYaz(k: KullaniciKaydi, ayrac: string): string {
+  return (k.gruplar ?? []).map(g => grupEtiketi(g.no, g.ad)).join(ayrac);
+}
+
 /** Ekran adı ile API uç noktası ayrışabiliyor: "Aktif Çalışanlar" ekranı /api/kullanicilar ucunu kullanır. */
 const apiYollari: Record<PageKind, string> = {
   esnaflar: "esnaflar", onaylar: "onaylar", gruplar: "gruplar", calisanlar: "kullanicilar",
@@ -135,7 +152,8 @@ export function ModulePage({ kind }: { kind: PageKind }) {
   // Canlı kanaldan gelen haberler ayrı bir sayaçla izlenir: "yenileme" referans listelerini de
   // (gruplar, çalışanlar) yeniden çeker, oysa bir görüşme kaydında yalnızca liste ve özet değişir.
   const [canliYenileme, setCanliYenileme] = useState(0);
-  const canliDurum = useCanliVeri(useCallback((olay: CanliOlay) => {
+  // Canlı kanal açık kalır (liste kendiliğinden tazelenir); yalnızca durum rozeti gösterilmiyor.
+  useCanliVeri(useCallback((olay: CanliOlay) => {
     if (olay.tur === "grup" || olay.tur === "kullanici") yenile();
     else setCanliYenileme(n => n + 1);
   }, [yenile]));
@@ -154,10 +172,11 @@ export function ModulePage({ kind }: { kind: PageKind }) {
   // Filtre seçenekleri için referans listeler. Hataları yutmuyoruz: bu istekler sessizce
   // başarısız olduğunda açılır süzgeç, sebebi görünmeden boş ("Sonuç yok") kalıyordu.
   useEffect(() => {
-    if (kind === "calisanlar") return;
+    // Meslek grubu listesi çalışanlar ekranında da gerekli: çalışanlar gruplara göre süzülüyor.
     api.get<GrupKaydi[]>("/api/gruplar")
       .then(setGruplar)
       .catch(() => setToast("Meslek grubu listesi alınamadı; grup süzgeci boş görünecek."));
+    if (kind === "calisanlar") return;
     api.get<KullaniciKaydi[]>("/api/kullanicilar")
       .then(setGorevliler)
       .catch(() => setToast("Çalışan listesi alınamadı; çalışan süzgeci boş görünecek."));
@@ -223,7 +242,7 @@ export function ModulePage({ kind }: { kind: PageKind }) {
       label, options, coklu, value: filtreler[anahtar] ?? "",
       onChange: deger => { setSayfa(1); setFiltreler(f => ({ ...f, [anahtar]: deger })); },
     });
-    const grupSecenek = gruplar.map(g => ({ deger: String(g.id), etiket: g.no ? `${g.no}. ${g.ad}` : g.ad }));
+    const grupSecenek = gruplar.map(g => ({ deger: String(g.id), etiket: grupEtiketi(g.no, g.ad) }));
     const gorevliSecenek = gorevliler.map(k => ({ deger: String(k.id), etiket: k.adSoyad }));
     switch (kind) {
       case "esnaflar": return [
@@ -250,6 +269,7 @@ export function ModulePage({ kind }: { kind: PageKind }) {
       case "calisanlar": return [
         yap("Rol", "rol", [{ deger: "Yönetici", etiket: "Yönetici" }, { deger: "Görevli", etiket: "Görevli" }]),
         yap("Durum", "durum", [{ deger: "Aktif", etiket: "Aktif" }, { deger: "Pasif", etiket: "Pasif" }]),
+        yap("Meslek Grubu", "grupId", grupSecenek, true),
       ];
     }
   }, [kind, filtreler, gruplar, gorevliler]);
@@ -306,7 +326,7 @@ export function ModulePage({ kind }: { kind: PageKind }) {
         ikinciGorevliId: g.ikinciGorevliId ? String(g.ikinciGorevliId) : "",
         ikinciGorevliIdEtiket: g.ikinciGorevli ?? "",
         tarih: tarihGirdisi(g.tarih),
-        sonuc: g.sonuc, takipGerekli: g.takipGerekli ? "Takip Edilecek" : "Gelmeyecek",
+        sonuc: g.sonuc,
         not: g.not ?? "", esnafId: String(detay.esnaf.id),
       },
     });
@@ -364,8 +384,9 @@ export function ModulePage({ kind }: { kind: PageKind }) {
     if (kind === "gruplar") {
       const g = kayit as GrupKaydi;
       setDetay({
-        baslik: g.ad,
+        baslik: grupEtiketi(g.no, g.ad),
         satirlar: [
+          { etiket: "Grup Adı", deger: g.ad },
           { etiket: "Açıklama", deger: g.aciklama }, { etiket: "Tür", deger: g.tur },
           { etiket: "Üst Grup", deger: g.ustGrup }, { etiket: "Üye Sayısı", deger: sayiGoster(g.esnafSayisi) },
           { etiket: "Aktif Görevli", deger: String(g.aktifGorevli) },
@@ -383,6 +404,7 @@ export function ModulePage({ kind }: { kind: PageKind }) {
           { etiket: "Kullanıcı Adı", deger: k.kullaniciAdi }, { etiket: "Rol", deger: k.rol, rozet: true },
           { etiket: "Görev", deger: k.gorev }, { etiket: "Birim", deger: k.birim },
           { etiket: "E-posta", deger: k.eposta }, { etiket: "Telefon", deger: k.telefon },
+          { etiket: "Sorumlu Olduğu Meslek Grupları", deger: gruplariYaz(k, "\n") || "Grup atanmamış" },
           { etiket: "Durum", deger: k.durum, rozet: true },
         ],
       });
@@ -422,7 +444,7 @@ export function ModulePage({ kind }: { kind: PageKind }) {
     if (kind === "gruplar") {
       const g = kayit as GrupKaydi;
       setDuzenleme({
-        form: "grup", id: g.id, baslik: `Grubu Düzenle — ${g.ad}`,
+        form: "grup", id: g.id, baslik: `Grubu Düzenle — ${grupEtiketi(g.no, g.ad)}`,
         degerler: {
           no: g.no ? String(g.no) : "", ad: g.ad, tur: g.tur, ustGrupId: g.ustGrupId ? String(g.ustGrupId) : "",
           aciklama: g.aciklama ?? "", durum: g.durum,
@@ -437,6 +459,8 @@ export function ModulePage({ kind }: { kind: PageKind }) {
         degerler: {
           adSoyad: k.adSoyad, eposta: k.eposta ?? "", telefon: k.telefon ?? "",
           rol: k.rol, gorev: k.gorev ?? "", birim: k.birim ?? "", durum: k.durum, kullaniciAdi: k.kullaniciAdi,
+          // Çoklu seçim alanı virgülle ayrılmış kimlik listesi bekliyor.
+          grupIdler: (k.gruplar ?? []).map(g => g.id).join(","),
         },
       });
       return;
@@ -459,6 +483,8 @@ export function ModulePage({ kind }: { kind: PageKind }) {
 
   const disaAktarYolu = kind === "esnaflar"
     ? `/api/esnaflar/disa-aktar?${sorguParametreleri({ ...page.tabs[tab].filtre, ...filtreler }, arama)}`
+    // Çalışan raporu süzgeç almıyor: uç tüm kullanıcıları tek listede verir.
+    : kind === "calisanlar" ? "/api/kullanicilar/disa-aktar"
     : null;
 
   const yonetici = yoneticiMi();
@@ -492,7 +518,6 @@ export function ModulePage({ kind }: { kind: PageKind }) {
           <div><small>TAM EKRAN ÇALIŞMA ALANI</small><h1>Üye Listesi</h1></div>
         </div>
         <div className="fullscreen-list-actions">
-          <CanliRozet durum={canliDurum} />
           <span className="fullscreen-record-count"><b>{sayiGoster(toplam)}</b> filtrelenmiş kayıt</span>
           <button className="fullscreen-close-button" onClick={() => setTamEkran(false)}>
             <Minimize2 size={17} /> Normal Görünüme Dön <kbd>Esc</kbd>
@@ -533,8 +558,11 @@ export function ModulePage({ kind }: { kind: PageKind }) {
       searchValue={kind === "esnaflar" ? arama : undefined}
       onSearch={kind === "esnaflar" ? d => { setSayfa(1); setArama(d); } : undefined}
       onReset={filtreleriTemizle}
-      extra={kind === "esnaflar" ? <>
-        <button className="secondary-button" onClick={() => setIceAktarAcik(true)}><CloudUpload size={16} /> İçe Aktar</button>
+      // İçe/dışa aktarma hem üye hem çalışan ekranında süzgeç şeridinden erişilebilir;
+      // çalışanlarda önceden yalnızca sayfa altındaki "Hızlı İşlemler" kutusundaydı ve gözden kaçıyordu.
+      extra={(kind === "esnaflar" || kind === "calisanlar") ? <>
+        {(kind === "esnaflar" || yonetici) &&
+          <button className="secondary-button" onClick={() => setIceAktarAcik(true)}><CloudUpload size={16} /> İçe Aktar</button>}
         <button className="secondary-button" onClick={() => disaAktarYolu && api.indir(disaAktarYolu).catch(() => setToast("Dışa aktarma başarısız oldu."))}><CloudDownload size={16} /> Dışa Aktar</button>
       </> : undefined}
     />
@@ -544,7 +572,6 @@ export function ModulePage({ kind }: { kind: PageKind }) {
         <div className="tabs">{page.tabs.map((t, i) =>
           <button className={i === tab ? "active" : ""} key={t.etiket} onClick={() => { setTab(i); setSayfa(1); }}>{t.etiket}</button>)}
         </div>
-        <CanliRozet durum={canliDurum} />
         {kind === "esnaflar" && <button className="open-fullscreen-button" onClick={tamEkraniAc} title="Listeyi tam ekran çalışma alanında aç">
           <Maximize2 size={16} /> Tam Ekranda Aç
         </button>}
@@ -588,15 +615,25 @@ export function ModulePage({ kind }: { kind: PageKind }) {
       gorusmeler={detay?.gorusmeler} onClose={() => setDetay(null)}
       onDuzenle={detay?.kayit ? esnafDurumuDuzenle : undefined}
       onGorusmeEkle={detay?.esnaf ? gorusmeEkle : undefined}
+      gorusmeEngeli={gorusmeEngeli(detay?.kayit?.uyelikDurumu)}
       onGorusmeDuzenle={detay?.esnaf ? gorusmeDuzenle : undefined}
       onGorusmeSil={detay?.esnaf ? gorusmeSil : undefined} />
     <ConfirmModal open={!!silme} baslik="Kaydı Sil" mesaj={silme?.mesaj ?? ""}
       onClose={() => setSilme(null)} onConfirm={sil} />
     {(kind === "esnaflar" || kind === "calisanlar") && <ImportModal
       open={iceAktarAcik}
-      baslik={kind === "esnaflar" ? "Üyeleri Excel'den İçe Aktar" : "Çalışanları Excel'den İçe Aktar"}
+      baslik={kind === "esnaflar" ? "Üyeleri Excel'den İçe Aktar" : "Aktif Çalışanları Excel'den İçe Aktar"}
       yuklemeYolu={`/api/${apiYolu}/ice-aktar`}
       sablonYolu={`/api/${apiYolu}/sablon`}
+      aciklama={kind === "calisanlar" ? <>
+        Odanın <b>ETSO GRUPLAR</b> listesi (<b>1. Üye</b>, <b>2. Üye</b>, <b>3. Üye</b>, <b>Grup</b>,
+        <b> Faaliyet Alanı</b> sütunları) doğrudan yüklenebilir: dosyadaki her kişi aktif çalışan olarak
+        açılır ve satırındaki meslek grubuna bağlanır. Sistemin kendi şablonu da (satır başına bir kişi,
+        <b> Meslek Grupları</b> sütunu noktalı virgülle ayrılmış) tanınır.
+        Zaten kayıtlı kişiler <b>ikizlenmez</b>; yalnızca eksik grup bağları tamamlanır, bu yüzden
+        aynı dosya yeniden yüklenebilir. Odadaki gruplarla eşleşmeyen faaliyet alanları numarasız
+        yeni grup olarak açılır ve aşağıda uyarı olarak listelenir.
+      </> : undefined}
       onClose={() => setIceAktarAcik(false)}
       onDone={m => { setToast(m); yenile(); }} />}
     {kind === "calisanlar" && <RolYonetimi open={rolYonetimiAcik} onClose={() => setRolYonetimiAcik(false)}
@@ -670,6 +707,8 @@ function donutVerisi(kind: PageKind, ist: Istatistik | null): DonutSegment[] {
       { label: "Onay Veren", value: ist.onayVeren ?? 0, color: "green" },
       { label: "Onay Vermeyen", value: ist.onayVermeyen ?? 0, color: "red" },
       { label: "Kararsız", value: ist.kararsiz ?? 0, color: "orange" },
+      { label: "Takip Edilecek", value: ist.takipEdilecek ?? 0, color: "blue" },
+      { label: "Gelmeyecek", value: ist.gelmeyecek ?? 0, color: "brown" },
       { label: "Görüşülmemiş", value: ist.gorusulmemis ?? 0, color: "gray" },
     ];
   }
@@ -708,7 +747,8 @@ function Stats({ kind, ist, filtreAktif = false, seciliGrupSayisi = 0 }: {
   // Durum kartlarının paydası, onay durumu süzgeci hariç aktif süzgeçlerin kapsamıdır:
   // "Onay Veren" sekmesindeyken yüzdeler %100'e sıçramaz, diğer kartlar sıfırlanmaz.
   const payda = ist.kapsamToplam || ist.toplam;
-  return <div className={`stats-grid ${ekKapsamKarti ? "six" : "five"}`}>
+  // Kart sayısı: toplam + 6 onay durumu = 7 (+ süzgeç etkinken kapsam kartı = 8).
+  return <div className={`stats-grid ${ekKapsamKarti ? "eight" : "seven"}`}>
     <StatCard icon={UsersRound} label="Toplam Üye" value={sayiGoster(ist.genelToplam ?? ist.toplam)} detail="Tüm üyeler" />
     {ekKapsamKarti && <StatCard icon={Store} label={kapsamEtiketi} value={sayiGoster(kapsamDegeri)}
       detail={kapsamDetayi}
@@ -716,6 +756,8 @@ function Stats({ kind, ist, filtreAktif = false, seciliGrupSayisi = 0 }: {
     <StatCard icon={CheckCircle2} label="Onay Veren" value={sayiGoster(ist.onayVeren)} detail={yuzde(ist.onayVeren, payda)} tone="green" />
     <StatCard icon={XCircle} label="Onay Vermeyen" value={sayiGoster(ist.onayVermeyen)} detail={yuzde(ist.onayVermeyen, payda)} tone="red" />
     <StatCard icon={CircleHelp} label="Kararsız" value={sayiGoster(ist.kararsiz)} detail={yuzde(ist.kararsiz, payda)} tone="orange" />
+    <StatCard icon={CalendarClock} label="Takip Edilecek" value={sayiGoster(ist.takipEdilecek)} detail={yuzde(ist.takipEdilecek, payda)} tone="blue" />
+    <StatCard icon={CircleSlash} label="Gelmeyecek" value={sayiGoster(ist.gelmeyecek)} detail={yuzde(ist.gelmeyecek, payda)} tone="brown" />
     <StatCard icon={Clock3} label="Görüşülmemiş" value={sayiGoster(ist.gorusulmemis)} detail={yuzde(ist.gorusulmemis, payda)} tone="gray" />
   </div>;
 }
@@ -729,6 +771,8 @@ const DURUM_CIPLERI = [
   { etiket: "Onay Veren", anahtar: "onayVeren", durum: "Onay Verdi", ikon: CheckCircle2, ton: "green" },
   { etiket: "Onay Vermeyen", anahtar: "onayVermeyen", durum: "Onay Vermedi", ikon: XCircle, ton: "red" },
   { etiket: "Kararsız", anahtar: "kararsiz", durum: "Kararsız", ikon: CircleHelp, ton: "orange" },
+  { etiket: "Takip Edilecek", anahtar: "takipEdilecek", durum: "Takip Edilecek", ikon: CalendarClock, ton: "blue" },
+  { etiket: "Gelmeyecek", anahtar: "gelmeyecek", durum: "Gelmeyecek", ikon: CircleSlash, ton: "brown" },
   { etiket: "Görüşülmemiş", anahtar: "gorusulmemis", durum: "Görüşülmedi", ikon: Clock3, ton: "gray" },
 ] as const;
 
@@ -780,6 +824,8 @@ function satirTonu(durum?: string | null, uyelikDurumu?: string | null): string 
     case "Onay Verdi": return "satir-onayli";
     case "Onay Vermedi": return "satir-red";
     case "Kararsız": return "satir-kararsiz";
+    case "Takip Edilecek": return "satir-takip";
+    case "Gelmeyecek": return "satir-gelmeyecek";
     default: return "";
   }
 }
@@ -799,7 +845,9 @@ function ModuleTable({ kind, kayitlar, yukleniyor, onKarar, onGoster, onDuzenle,
     return <div className="table-scroll"><table>
       <thead><tr><th>Grup Adı</th><th>Grup Türü</th><th>Üst Grup</th><th>Üye Sayısı</th><th>Aktif Görevli</th><th>Son Güncelleme</th><th>Durum</th><th>İşlemler</th></tr></thead>
       <tbody>{!liste.length ? <Bos yukleniyor={yukleniyor} sutun={8} /> : liste.map(g => <tr key={g.id}>
-        <td><strong>{g.ad}</strong><small>{g.aciklama}</small></td><td>{g.tur}</td><td>{g.ustGrup ?? "-"}</td>
+        {/* Gruplar numarasıyla anılır; kaydın sektör adı ikinci satırda referans olarak durur. */}
+        <td><strong>{grupEtiketi(g.no, g.ad)}</strong><small>{g.no ? g.ad : g.aciklama}</small></td>
+        <td>{g.tur}</td><td>{g.ustGrup ?? "-"}</td>
         <td>{sayiGoster(g.esnafSayisi)}</td><td>{g.aktifGorevli}</td><td>{tarihGoster(g.guncellemeTarihi)}</td>
         <td><span className={`badge ${g.durum === "Aktif" ? "success" : "danger"}`}>{g.durum}</span></td>
         <td><SatirIslemleri kayit={g} {...islemler} /></td>
@@ -809,10 +857,12 @@ function ModuleTable({ kind, kayitlar, yukleniyor, onKarar, onGoster, onDuzenle,
   if (kind === "calisanlar") {
     const liste = kayitlar as KullaniciKaydi[];
     return <div className="table-scroll"><table>
-      <thead><tr><th>Çalışan</th><th>Rol</th><th>Görev</th><th>Birim</th><th>E-posta</th><th>Telefon</th><th>Durum</th><th>İşlemler</th></tr></thead>
-      <tbody>{!liste.length ? <Bos yukleniyor={yukleniyor} sutun={8} /> : liste.map(k => <tr key={k.id}>
+      <thead><tr><th>Çalışan</th><th>Rol</th><th>Meslek Grupları</th><th>Görev</th><th>Birim</th><th>E-posta</th><th>Telefon</th><th>Durum</th><th>İşlemler</th></tr></thead>
+      <tbody>{!liste.length ? <Bos yukleniyor={yukleniyor} sutun={9} /> : liste.map(k => <tr key={k.id}>
         <td><div className="user-cell"><span className="avatar small">{k.adSoyad.split(" ").map(x => x[0]).join("")}</span><div><strong>{k.adSoyad}</strong><small>{k.kullaniciAdi}</small></div></div></td>
-        <td><span className="badge info">{k.rol}</span></td><td>{k.gorev ?? "-"}</td><td>{k.birim ?? "-"}</td>
+        <td><span className="badge info">{k.rol}</span></td>
+        <td className="grup-hucresi" title={gruplariYaz(k, "\n")}>{gruplariYaz(k, ", ") || "-"}</td>
+        <td>{k.gorev ?? "-"}</td><td>{k.birim ?? "-"}</td>
         <td>{k.eposta ?? "-"}</td><td>{k.telefon ?? "-"}</td>
         <td><span className={`badge ${k.durum === "Aktif" ? "success" : "danger"}`}>{k.durum}</span></td>
         <td><SatirIslemleri kayit={k} {...islemler} /></td>
@@ -849,7 +899,7 @@ function ModuleTable({ kind, kayitlar, yukleniyor, onKarar, onGoster, onDuzenle,
       <td><strong>{e.isletme}</strong><small>{e.adSoyad}{e.gorevi ? ` — ${e.gorevi}` : ""}
         {/* Şirketin oda kaydında birden çok imza yetkilisi varsa listede de belli olsun. */}
         {!!e.yetkiliSayisi && e.yetkiliSayisi > 1 && <b className="yetkili-rozeti">+{e.yetkiliSayisi - 1} yetkili</b>}</small></td>
-      <td>{e.grup ? (e.grupNo ? `${e.grupNo}. ${e.grup}` : e.grup) : "-"}</td>
+      <td>{grupEtiketi(e.grupNo, e.grup)}</td>
       <td><span className={`badge ${durumTonu(e.uyelikDurumu ?? "")}`}>{e.uyelikDurumu ?? "-"}</span>
         {e.uyelikDurumu === "Askı" && e.durumDegisimNedeni && <small>{e.durumDegisimNedeni}</small>}</td>
       <td>{e.telefon ?? e.isTelefonu ?? "-"}</td><td>{e.ilce ?? "-"}</td>

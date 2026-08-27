@@ -1,10 +1,16 @@
 /** @type {import('next').NextConfig} */
 
-// API başka bir kaynakta (varsayılan http://localhost:5180) olduğu için CSP'nin
-// connect-src listesine açıkça eklenmesi gerekir; aksi halde tarayıcı istekleri engeller.
+const genelApiAdresi = process.env.NEXT_PUBLIC_API_URL ?? "https://api.courseintellect.com.tr";
+// Yerelde tarayıcı API'ye doğrudan bağlanmaz. macOS 26 + .NET 10'un loopback bağlantı
+// sorunundan etkilenmemesi için istekler aynı kaynakta /api/proxy üzerinden Next'e gelir.
+const apiHedefi = (process.env.API_INTERNAL_URL
+  ?? (genelApiAdresi.startsWith("/") ? "http://127.0.0.1:5180" : genelApiAdresi))
+  .replace(/\/+$/, "");
+
+// API başka bir kaynakta olduğunda CSP'nin connect-src listesine açıkça eklenmesi gerekir.
 const apiKaynagi = (() => {
   try {
-    return new URL(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5180").origin;
+    return new URL(apiHedefi).origin;
   } catch {
     return "http://localhost:5180";
   }
@@ -64,6 +70,9 @@ const nextConfig = {
   devIndicators: false,
   outputFileTracingRoot: process.cwd(),
   images: { formats: ["image/avif", "image/webp"] },
+  async rewrites() {
+    return [{ source: "/api/proxy/:path*", destination: `${apiHedefi}/:path*` }];
+  },
   async headers() {
     // Kaynak deseni basePath'e göre otomatik ön eklenir; burada kök desen yeterlidir.
     return [{ source: "/:path*", headers: guvenlikBasliklari }];

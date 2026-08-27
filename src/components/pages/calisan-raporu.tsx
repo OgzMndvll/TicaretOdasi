@@ -5,12 +5,11 @@ import { CheckCircle2, ChevronDown, ChevronRight, CloudDownload, Filter, Message
 import { FilterBar, FiltreSecim } from "@/components/ui/filter-bar";
 import { StatCard } from "@/components/ui/stat-card";
 import {
-  api, API_ERISIM_HATASI, durumTonu, sayiGoster, tarihGoster, yuzde,
+  api, API_ERISIM_HATASI, durumTonu, grupEtiketi, sayiGoster, tarihGoster, yuzde,
   CalisanGorusmeSatiri, CalisanRaporSatiri, CalisanRaporu as CalisanRaporuVerisi, GrupKaydi,
 } from "@/lib/api";
+import { GORUSME_SONUCLARI } from "@/components/ui/action-modal";
 import { useCanliYenileme } from "@/lib/canli";
-
-const GORUSME_SONUCLARI = ["Onay Verdi", "Onay Vermedi", "Kararsız"];
 
 function gunOnce(gun: number): string {
   const t = new Date();
@@ -86,7 +85,7 @@ export function CalisanRaporu({ onToast }: { onToast: (mesaj: string) => void })
     },
     {
       label: "Meslek Grubu", value: grupId, onChange: setGrupId,
-      options: gruplar.map(g => ({ deger: String(g.id), etiket: g.no ? `${g.no}. ${g.ad}` : g.ad })),
+      options: gruplar.map(g => ({ deger: String(g.id), etiket: grupEtiketi(g.no, g.ad) })),
     },
   ], [durum, sonuc, grupId, gruplar]);
 
@@ -135,7 +134,15 @@ export function CalisanRaporu({ onToast }: { onToast: (mesaj: string) => void })
       <StatCard icon={MessageSquareText} label="Toplam Görüşme" value={toplam ? sayiGoster(toplam.gorusme) : "…"}
         detail="Seçili süzgeçlerle" tone="purple" />
       <StatCard icon={CheckCircle2} label="Onay Verdi" value={toplam ? sayiGoster(toplam.onayVerdi) : "…"}
-        detail={toplam ? `${sayiGoster(toplam.onayVermedi)} ret · ${sayiGoster(toplam.kararsiz)} kararsız` : ""} tone="green" />
+        detail={toplam
+          ? `${sayiGoster(toplam.onayVermedi)} ret · ${sayiGoster(toplam.kararsiz)} kararsız · `
+            + `${sayiGoster(toplam.takipEdilecek)} takip · ${sayiGoster(toplam.gelmeyecek)} gelmeyecek`
+          : ""}
+        detailTitle={toplam
+          ? `Onay vermedi: ${sayiGoster(toplam.onayVermedi)}\nKararsız: ${sayiGoster(toplam.kararsiz)}\n`
+            + `Takip edilecek: ${sayiGoster(toplam.takipEdilecek)}\nGelmeyecek: ${sayiGoster(toplam.gelmeyecek)}`
+          : undefined}
+        tone="green" />
       {sonuc
         // Sonuç süzgeci açıkken her satırda pay = payda olur; oran %100'e sabitlenip yanıltır.
         ? <StatCard icon={Filter} label="Sonuç Süzgeci" value={sonuc}
@@ -147,11 +154,11 @@ export function CalisanRaporu({ onToast }: { onToast: (mesaj: string) => void })
       <div className="table-scroll"><table className="calisan-tablosu">
         <thead><tr>
           <th>Çalışan</th><th>Görüşme</th><th>Görüşülen Üye</th>
-          <th>Onay Verdi</th><th>Onay Vermedi</th><th>Kararsız</th>
+          <th>Onay Verdi</th><th>Onay Vermedi</th><th>Kararsız</th><th>Takip Edilecek</th><th>Gelmeyecek</th>
           <th>Onay Alınan Üye</th><th>2. Kişi Katılımı</th><th>Onay Oranı</th><th>Son Görüşme</th><th>Kimlerle</th>
         </tr></thead>
         <tbody>
-          {satirlar.length === 0 && <tr><td colSpan={11} className="bos-satir">
+          {satirlar.length === 0 && <tr><td colSpan={13} className="bos-satir">
             Seçili süzgeçlere uyan çalışan yok.
           </td></tr>}
           {satirlar.map(s => <CalisanSatiri key={s.id} satir={s} acik={acikId === s.id} detay={detay}
@@ -179,6 +186,8 @@ function CalisanSatiri({ satir, acik, detay, oraniGizle, onAc }: {
       <td>{sayiGoster(satir.onayVerdi)}</td>
       <td>{sayiGoster(satir.onayVermedi)}</td>
       <td>{sayiGoster(satir.kararsiz)}</td>
+      <td>{sayiGoster(satir.takipEdilecek)}</td>
+      <td>{sayiGoster(satir.gelmeyecek)}</td>
       <td>{sayiGoster(satir.onayliUyeSayisi)}</td>
       <td>{satir.ikinciKatilim ? sayiGoster(satir.ikinciKatilim) : "-"}</td>
       <td>{oraniGizle
@@ -193,7 +202,7 @@ function CalisanSatiri({ satir, acik, detay, oraniGizle, onAc }: {
         </button>
       </td>
     </tr>
-    {acik && <tr className="detay-satiri"><td colSpan={11}>
+    {acik && <tr className="detay-satiri"><td colSpan={13}>
       {detay === null
         ? <p className="bos-satir">Görüşme dökümü yükleniyor…</p>
         : detay.length === 0
@@ -206,7 +215,7 @@ function CalisanSatiri({ satir, acik, detay, oraniGizle, onAc }: {
             <tbody>{detay.map(g => <tr key={g.id}>
               <td><strong>{g.esnaf}</strong></td>
               <td>{g.isletme}</td>
-              <td>{g.grup ? `${g.grupNo ? `${g.grupNo}. ` : ""}${g.grup}` : "-"}</td>
+              <td>{grupEtiketi(g.grupNo, g.grup)}</td>
               <td>{g.ilce ?? "-"}</td>
               <td>{g.sira}. Görüşme</td>
               <td>{tarihGoster(g.tarih)}</td>

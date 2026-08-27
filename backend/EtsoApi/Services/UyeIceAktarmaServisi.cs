@@ -11,7 +11,9 @@ namespace EtsoApi.Services;
 /// </summary>
 public static class UyeIceAktarmaServisi
 {
-    public static readonly string[] OnayDurumlari = ["Onay Verdi", "Onay Vermedi", "Kararsız", "Görüşülmedi"];
+    // Görüşme sonucu seçenekleri + hiç görüşülmemiş üyeler için "Görüşülmedi".
+    public static readonly string[] OnayDurumlari =
+        [.. Controllers.GorusmelerController.GecerliSonuclar, "Görüşülmedi"];
 
     // Odadaki üyelik durumu. "Faal" ve "Askı" oda raporundan gelir; "Pasif" kaydı elde tutulan ayrılmış üyeler içindir.
     public static readonly string[] UyelikDurumlari = ["Faal", "Askı", "Pasif"];

@@ -14,4 +14,7 @@ public class Grup
     public DateTime GuncellemeTarihi { get; set; } = DateTime.UtcNow;
 
     public List<Esnaf> Esnaflar { get; set; } = [];
+
+    /// <summary>Gruba bakan aktif çalışanlar (bkz. <see cref="KullaniciGrup"/>).</summary>
+    public List<KullaniciGrup> Calisanlar { get; set; } = [];
 }

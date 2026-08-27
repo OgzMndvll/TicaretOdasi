@@ -70,11 +70,19 @@ public static class ExcelServisi
         var sonuc = new List<(int, Dictionary<string, string>)>();
         if (kullanilanAlan is null) return sonuc;
 
-        var basliklar = kullanilanAlan.FirstRow().Cells()
+        // Başlık satırı her zaman ilk satır değildir: kurum dosyalarında ilk satır çoğu zaman
+        // tek hücrelik bir başlık ("ETSO GRUPLAR"), ardından boş bir satır gelir. Bu yüzden
+        // başlık olarak, en az iki dolu hücresi olan ilk satır kabul edilir; öncesindeki
+        // satırlar atlanır. Kendi şablonlarımızda bu, yine 1. satırdır.
+        var satirlar = kullanilanAlan.RowsUsed().ToList();
+        var baslikSirasi = satirlar.FindIndex(r => r.Cells().Count(c => !string.IsNullOrWhiteSpace(c.GetString())) >= 2);
+        if (baslikSirasi < 0) return sonuc;
+
+        var basliklar = satirlar[baslikSirasi].Cells()
             .Select(c => Normalize(c.GetString()))
             .ToList();
 
-        foreach (var satir in kullanilanAlan.RowsUsed().Skip(1))
+        foreach (var satir in satirlar.Skip(baslikSirasi + 1))
         {
             var degerler = new Dictionary<string, string>();
             for (var i = 0; i < basliklar.Count; i++)

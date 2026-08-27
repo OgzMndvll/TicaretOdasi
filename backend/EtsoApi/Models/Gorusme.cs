@@ -19,8 +19,17 @@ public class Gorusme
     /// <summary>Bu üyeyle kaçıncı görüşme olduğu (1, 2, 3...). Kayıt anında sunucuda hesaplanır, elle girilmez.</summary>
     public int Sira { get; set; } = 1;
 
-    // Onay Verdi | Onay Vermedi | Kararsız
+    /// <summary>
+    /// Görüşme sonucu: Onay Verdi | Onay Vermedi | Kararsız | Takip Edilecek | Gelmeyecek.
+    /// Üyenin <c>Esnaf.Durum</c> alanı en güncel görüşmenin bu değerini yansıtır.
+    /// </summary>
     public string Sonuc { get; set; } = "Kararsız";
     public string? Not { get; set; }
+
+    /// <summary>
+    /// Sonuçtan türetilir: yalnızca "Takip Edilecek" sonucunda true olur. Ayrı bir form alanı
+    /// değildir; takip bilgisi görüşme sonucunun içine alındı, kolon sorgular ve raporlar
+    /// (takip gereken görüşme sayısı) için korunuyor.
+    /// </summary>
     public bool TakipGerekli { get; set; }
 }

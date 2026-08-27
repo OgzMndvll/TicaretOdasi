@@ -5,8 +5,10 @@ import { CloudUpload, Download, FileSpreadsheet } from "lucide-react";
 import { Modal } from "./modal";
 import { api, ApiError, IceAktarmaSonucu } from "@/lib/api";
 
-export function ImportModal({ open, baslik, yuklemeYolu, sablonYolu, onClose, onDone }: {
+export function ImportModal({ open, baslik, yuklemeYolu, sablonYolu, aciklama, onClose, onDone }: {
   open: boolean; baslik: string; yuklemeYolu: string; sablonYolu: string;
+  /** Ekranın kendi açıklaması; verilmezse üye içe aktarma metni gösterilir. */
+  aciklama?: React.ReactNode;
   onClose: () => void; onDone: (mesaj: string) => void;
 }) {
   const dosyaRef = useRef<HTMLInputElement>(null);
@@ -39,11 +41,13 @@ export function ImportModal({ open, baslik, yuklemeYolu, sablonYolu, onClose, on
   return <Modal open={open} title={baslik} onClose={kapat}>
     <div className="action-form">
       <p style={{ lineHeight: 1.6, color: "#5b6779" }}>
-        Sistem şablonunun yanı sıra oda üye listelerindeki <b>UNVAN</b>, <b>ADRES</b>, <b>İŞ TELEFONU</b>,
-        <b> CEP TELEFONU (GSM)</b> ve <b>YETKİLİ ADI SOYADI</b> sütunları da otomatik tanınır.
-        Sistemde zaten kayıtlı olan üyeler <b>ikizlenmez</b>: değişen alanları güncellenir,
-        değişmeyenler olduğu gibi bırakılır. Görüşme sonuçları ve atanan görevli içe aktarmadan
-        etkilenmez; dosyada boş bırakılan bir sütun mevcut bilgiyi silmez.
+        {aciklama ?? <>
+          Sistem şablonunun yanı sıra oda üye listelerindeki <b>UNVAN</b>, <b>ADRES</b>, <b>İŞ TELEFONU</b>,
+          <b> CEP TELEFONU (GSM)</b> ve <b>YETKİLİ ADI SOYADI</b> sütunları da otomatik tanınır.
+          Sistemde zaten kayıtlı olan üyeler <b>ikizlenmez</b>: değişen alanları güncellenir,
+          değişmeyenler olduğu gibi bırakılır. Görüşme sonuçları ve atanan görevli içe aktarmadan
+          etkilenmez; dosyada boş bırakılan bir sütun mevcut bilgiyi silmez.
+        </>}
       </p>
       <button type="button" className="secondary-button" style={{ alignSelf: "flex-start" }}
         onClick={() => api.indir(sablonYolu).catch(() => setHata("Şablon indirilemedi."))}>

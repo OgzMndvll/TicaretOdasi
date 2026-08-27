@@ -104,6 +104,8 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
                 onayVeren = DurumSayisi("Onay Verdi"),
                 onayVermeyen = DurumSayisi("Onay Vermedi"),
                 kararsiz = DurumSayisi("Kararsız"),
+                takipEdilecek = DurumSayisi("Takip Edilecek"),
+                gelmeyecek = DurumSayisi("Gelmeyecek"),
                 gorusulmemis = DurumSayisi("Görüşülmedi"),
             },
         });
@@ -155,6 +157,8 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
             onayVeren = Say("Onay Verdi"),
             onayVermeyen = Say("Onay Vermedi"),
             kararsiz = Say("Kararsız"),
+            takipEdilecek = Say("Takip Edilecek"),
+            gelmeyecek = Say("Gelmeyecek"),
             gorusulmemis = Say("Görüşülmedi"),
             gorusulen = toplam - Say("Görüşülmedi"),
             faal = uyelik.FirstOrDefault(u => u.Durum == "Faal")?.Adet ?? 0,
@@ -305,7 +309,13 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
     /// <summary>Süzgeç dizisi gerçekten değer taşıyor mu (boş dizi "süzme yok" demektir).</summary>
     private static bool Dolu<T>(List<T>? deger) => deger is { Count: > 0 };
 
-    private static readonly string[] GecerliDurumlar = ["Onay Verdi", "Onay Vermedi", "Kararsız", "Görüşülmedi"];
+    /// <summary>
+    /// Üyenin onay durumu. En güncel görüşmenin sonucundan gelir, bu yüzden görüşme sonucu
+    /// seçenekleriyle ("Takip Edilecek", "Gelmeyecek" dahil) aynı listedir; ek olarak hiç
+    /// görüşülmemiş üyeler için "Görüşülmedi" değerini taşır.
+    /// </summary>
+    private static readonly string[] GecerliDurumlar =
+        [.. GorusmelerController.GecerliSonuclar, "Görüşülmedi"];
 
     private static string[] UyelikDurumlari => UyeIceAktarmaServisi.UyelikDurumlari;
 

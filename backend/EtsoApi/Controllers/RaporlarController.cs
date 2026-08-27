@@ -25,6 +25,8 @@ public class RaporlarController(EtsoDbContext db) : ControllerBase
                 Onaylayan = g.Esnaflar.Count(e => e.Durum == "Onay Verdi"),
                 Reddedilen = g.Esnaflar.Count(e => e.Durum == "Onay Vermedi"),
                 Kararsiz = g.Esnaflar.Count(e => e.Durum == "Kararsız"),
+                TakipEdilecek = g.Esnaflar.Count(e => e.Durum == "Takip Edilecek"),
+                Gelmeyecek = g.Esnaflar.Count(e => e.Durum == "Gelmeyecek"),
                 Gorusulmeyen = g.Esnaflar.Count(e => e.Durum == "Görüşülmedi"),
             })
             .OrderByDescending(g => g.ToplamEsnaf)
@@ -32,7 +34,8 @@ public class RaporlarController(EtsoDbContext db) : ControllerBase
 
         return Ok(rapor.Select(g => new
         {
-            g.Id, g.No, g.Ad, g.ToplamEsnaf, g.Gorusme, g.Onaylayan, g.Reddedilen, g.Kararsiz, g.Gorusulmeyen,
+            g.Id, g.No, g.Ad, g.ToplamEsnaf, g.Gorusme, g.Onaylayan, g.Reddedilen, g.Kararsiz,
+            g.TakipEdilecek, g.Gelmeyecek, g.Gorusulmeyen,
             OnayOrani = g.ToplamEsnaf == 0 ? 0 : Math.Round(g.Onaylayan * 100.0 / g.ToplamEsnaf, 1),
         }));
     }
@@ -50,6 +53,8 @@ public class RaporlarController(EtsoDbContext db) : ControllerBase
                 Onaylayan = g.Esnaflar.Count(e => e.Durum == "Onay Verdi"),
                 Reddedilen = g.Esnaflar.Count(e => e.Durum == "Onay Vermedi"),
                 Kararsiz = g.Esnaflar.Count(e => e.Durum == "Kararsız"),
+                TakipEdilecek = g.Esnaflar.Count(e => e.Durum == "Takip Edilecek"),
+                Gelmeyecek = g.Esnaflar.Count(e => e.Durum == "Gelmeyecek"),
                 Gorusulmeyen = g.Esnaflar.Count(e => e.Durum == "Görüşülmedi"),
             })
             .OrderByDescending(g => g.ToplamEsnaf)
@@ -57,11 +62,13 @@ public class RaporlarController(EtsoDbContext db) : ControllerBase
 
         var satirlar = rapor.Select(g => new object?[]
         {
-            g.No, g.Ad, g.ToplamEsnaf, g.Gorusme, g.Onaylayan, g.Reddedilen, g.Kararsiz, g.Gorusulmeyen,
+            g.No, g.Ad, g.ToplamEsnaf, g.Gorusme, g.Onaylayan, g.Reddedilen, g.Kararsiz,
+            g.TakipEdilecek, g.Gelmeyecek, g.Gorusulmeyen,
             g.ToplamEsnaf == 0 ? 0.0 : Math.Round(g.Onaylayan * 100.0 / g.ToplamEsnaf, 1),
         });
         var dosya = ExcelServisi.Olustur("Grup Raporu",
-            ["Grup No", "Grup", "Toplam Üye", "Görüşme", "Onaylayan", "Reddedilen", "Kararsız", "Görüşülmeyen", "Onay Oranı (%)"],
+            ["Grup No", "Grup", "Toplam Üye", "Görüşme", "Onaylayan", "Reddedilen", "Kararsız",
+             "Takip Edilecek", "Gelmeyecek", "Görüşülmeyen", "Onay Oranı (%)"],
             satirlar);
         return File(dosya, ExcelServisi.IcerikTipi, $"grup-raporu-{DateTime.Now:yyyyMMdd-HHmm}.xlsx");
     }
@@ -107,6 +114,8 @@ public class RaporlarController(EtsoDbContext db) : ControllerBase
     private record CalisanSatiri(
         int Id, string AdSoyad, string? Gorev, string? Birim, string Durum, string Rol,
         int Gorusme, int UyeSayisi, int OnayVerdi, int OnayVermedi, int Kararsiz,
+        // Sonuç sütunlarının toplamı "Gorusme" ile eşleşsin diye takip/gelmeyecek de ayrı sayılır.
+        int TakipEdilecek, int Gelmeyecek,
         int OnayliUyeSayisi, int IkinciKatilim, DateTime? SonGorusme, double OnayOrani);
 
     /// <summary>
@@ -126,6 +135,8 @@ public class RaporlarController(EtsoDbContext db) : ControllerBase
                 OnayVerdi = g.Count(x => x.Sonuc == "Onay Verdi"),
                 OnayVermedi = g.Count(x => x.Sonuc == "Onay Vermedi"),
                 Kararsiz = g.Count(x => x.Sonuc == "Kararsız"),
+                TakipEdilecek = g.Count(x => x.Sonuc == "Takip Edilecek"),
+                Gelmeyecek = g.Count(x => x.Sonuc == "Gelmeyecek"),
                 SonGorusme = (DateTime?)g.Max(x => x.Tarih),
             })
             .ToDictionaryAsync(x => x.GorevliId);
@@ -160,6 +171,7 @@ public class RaporlarController(EtsoDbContext db) : ControllerBase
                     toplam,
                     uyeSayilari.GetValueOrDefault(k.Id),
                     s?.OnayVerdi ?? 0, s?.OnayVermedi ?? 0, s?.Kararsiz ?? 0,
+                    s?.TakipEdilecek ?? 0, s?.Gelmeyecek ?? 0,
                     onayliUyeSayilari.GetValueOrDefault(k.Id),
                     ikinciKatilimlar.GetValueOrDefault(k.Id),
                     s?.SonGorusme,
@@ -185,6 +197,8 @@ public class RaporlarController(EtsoDbContext db) : ControllerBase
                 onayVerdi = satirlar.Sum(s => s.OnayVerdi),
                 onayVermedi = satirlar.Sum(s => s.OnayVermedi),
                 kararsiz = satirlar.Sum(s => s.Kararsiz),
+                takipEdilecek = satirlar.Sum(s => s.TakipEdilecek),
+                gelmeyecek = satirlar.Sum(s => s.Gelmeyecek),
             },
         });
     }
@@ -223,19 +237,24 @@ public class RaporlarController(EtsoDbContext db) : ControllerBase
         var dosya = ExcelServisi.OlusturCok(
             ("Çalışan Özeti",
                 ["Çalışan", "Görev", "Birim", "Rol", "Durum", "Görüşme", "Görüşülen Üye", "Onay Verdi",
-                 "Onay Vermedi", "Kararsız", "Onay Alınan Üye", "İkinci Kişi Katılımı", "Onay Oranı (%)", "Son Görüşme"],
+                 "Onay Vermedi", "Kararsız", "Takip Edilecek", "Gelmeyecek",
+                 "Onay Alınan Üye", "İkinci Kişi Katılımı", "Onay Oranı (%)", "Son Görüşme"],
                 ozet.Select(s => new object?[]
                 {
                     s.AdSoyad, s.Gorev, s.Birim, s.Rol, s.Durum, s.Gorusme, s.UyeSayisi, s.OnayVerdi,
-                    s.OnayVermedi, s.Kararsiz, s.OnayliUyeSayisi, s.IkinciKatilim, s.OnayOrani, s.SonGorusme,
+                    s.OnayVermedi, s.Kararsiz, s.TakipEdilecek, s.Gelmeyecek,
+                    s.OnayliUyeSayisi, s.IkinciKatilim, s.OnayOrani, s.SonGorusme,
                 })),
             ("Görüşme Detayı",
+                // Ayrı "Takip" sütunu yok: takip bilgisi artık "Sonuç" seçeneklerinin içinde.
+                // Eski kayıtlarda TakipGerekli sonuçtan bağımsız işaretlenmiş olabiliyor ve iki
+                // sütun yan yana çelişkili görünürdü; kolon geçmişi bozmamak için silinmedi.
                 ["Görüşen Çalışan", "Görüşecek Kişi", "Üye Yetkilisi", "Unvan", "Meslek Grubu No", "Meslek Grubu",
-                 "İlçe", "Telefon", "Kaçıncı Görüşme", "Tarih", "Sonuç", "Takip", "Not"],
+                 "İlçe", "Telefon", "Kaçıncı Görüşme", "Tarih", "Sonuç", "Not"],
                 detay.Select(g => new object?[]
                 {
                     g.Gorevli, g.IkinciGorevli, g.Esnaf, g.Isletme, g.GrupNo, g.Grup,
-                    g.Ilce, g.Telefon, g.Sira, g.Tarih, g.Sonuc, g.TakipGerekli ? "Gerekli" : "-", g.Not,
+                    g.Ilce, g.Telefon, g.Sira, g.Tarih, g.Sonuc, g.Not,
                 })));
 
         return File(dosya, ExcelServisi.IcerikTipi, $"calisan-raporu-{DateTime.Now:yyyyMMdd-HHmm}.xlsx");

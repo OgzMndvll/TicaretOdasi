@@ -21,6 +21,9 @@ public class SistemController(EtsoDbContext db, IWebHostEnvironment ortam) : Con
             olusturmaTarihi = DateTime.UtcNow,
             gruplar = await db.Gruplar.AsNoTracking().ToListAsync(),
             kullanicilar = await db.Kullanicilar.AsNoTracking().ToListAsync(),
+            // Çalışan–meslek grubu bağları ayrı tablodur; kullanıcı kaydıyla birlikte gelmez.
+            kullaniciGruplari = await db.KullaniciGruplari.AsNoTracking()
+                .Select(b => new { b.Id, b.KullaniciId, b.GrupId, b.Sira }).ToListAsync(),
             esnaflar = await db.Esnaflar.AsNoTracking().Select(e => new
             {
                 e.Id, e.UyeSicilNo, e.TicaretSicilNo, e.AdSoyad, e.Isletme, e.TabelaUnvani, e.Gorevi,

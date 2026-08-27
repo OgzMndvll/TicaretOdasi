@@ -19,13 +19,32 @@ public class KullanicilarController(EtsoDbContext db, CanliBildirim canli) : Con
 
     [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Yönetici")]
     [HttpGet]
-    public async Task<IActionResult> Listele([FromQuery] string? rol, [FromQuery] string? durum)
+    public async Task<IActionResult> Listele(
+        [FromQuery] string? rol, [FromQuery] string? durum, [FromQuery] List<int>? grupId)
     {
         var sorgu = db.Kullanicilar.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(rol)) sorgu = sorgu.Where(k => k.Rol == rol);
         if (!string.IsNullOrWhiteSpace(durum)) sorgu = sorgu.Where(k => k.Durum == durum);
-        return Ok(await sorgu.OrderBy(k => k.AdSoyad).ToListAsync());
+        // Meslek grubu süzgeci çoklu seçime açıktır: seçilen gruplardan herhangi birine bakan çalışanlar.
+        if (grupId is { Count: > 0 }) sorgu = sorgu.Where(k => k.Gruplar.Any(b => grupId.Contains(b.GrupId)));
+        return Ok(await Projeksiyon(sorgu.OrderBy(k => k.AdSoyad)).ToListAsync());
     }
+
+    /// <summary>
+    /// Kullanıcı kaydının API görünümü. Ham varlık döndürülmez: <see cref="Kullanici.Gruplar"/>
+    /// gezinme özelliği yüklenmediğinde boş dizi görünüp yanıltır, yüklendiğinde ise
+    /// Grup → Esnaf → Grup döngüsüyle serileştirmeyi kilitler.
+    /// </summary>
+    private static IQueryable<object> Projeksiyon(IQueryable<Kullanici> sorgu) => sorgu.Select(k => new
+    {
+        k.Id, k.AdSoyad, k.KullaniciAdi, k.Rol, k.Gorev, k.Birim, k.Eposta, k.Telefon, k.Durum, k.OlusturmaTarihi,
+        Gruplar = k.Gruplar
+            // Gruplar ekranda numarasıyla anıldığı için sıralama da numaraya göre;
+            // numarasız gruplar sona alfabetik gelir.
+            .OrderBy(b => b.Grup!.No ?? int.MaxValue).ThenBy(b => b.Grup!.Ad)
+            .Select(b => new { Id = b.GrupId, b.Grup!.No, b.Grup.Ad, b.Sira })
+            .ToList(),
+    });
 
     [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Yönetici")]
     [HttpGet("istatistik")]
@@ -41,7 +60,7 @@ public class KullanicilarController(EtsoDbContext db, CanliBildirim canli) : Con
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Getir(int id)
     {
-        var kullanici = await db.Kullanicilar.FindAsync(id);
+        var kullanici = await Projeksiyon(db.Kullanicilar.AsNoTracking().Where(k => k.Id == id)).FirstOrDefaultAsync();
         return kullanici is null ? NotFound() : Ok(kullanici);
     }
 
@@ -92,8 +111,17 @@ public class KullanicilarController(EtsoDbContext db, CanliBildirim canli) : Con
             string.IsNullOrWhiteSpace(dto.Sifre)
                 ? Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
                 : dto.Sifre);
+        // Grup listesi kullanıcı yazılmadan önce doğrulanır; aksi halde hatalı bir seçim
+        // yüzünden gruplarsız bir kullanıcı kaydı geride kalırdı.
+        var grupHatasi = await GruplariDogrula(dto.GrupIdler);
+        if (grupHatasi is not null) return BadRequest(new { mesaj = grupHatasi });
+
         db.Kullanicilar.Add(kullanici);
         await db.SaveChangesAsync();
+
+        await GruplariEsitle(kullanici, dto.GrupIdler);
+        await db.SaveChangesAsync();
+
         // Kayıt değişti: bağlı paneller listeyi kendiliğinden tazeler (bkz. Services/CanliBildirim.cs).
         await canli.DegistiAsync("kullanici", kullanici.Id);
         return CreatedAtAction(nameof(Getir), new { id = kullanici.Id }, new { kullanici.Id, kullanici.KullaniciAdi });
@@ -154,9 +182,47 @@ public class KullanicilarController(EtsoDbContext db, CanliBildirim canli) : Con
         kullanici.Eposta = dto.Eposta;
         kullanici.Telefon = dto.Telefon;
         if (!string.IsNullOrWhiteSpace(dto.Durum)) kullanici.Durum = dto.Durum;
+
+        var grupHatasi = await GruplariDogrula(dto.GrupIdler);
+        if (grupHatasi is not null) return BadRequest(new { mesaj = grupHatasi });
+        await GruplariEsitle(kullanici, dto.GrupIdler);
+
         await db.SaveChangesAsync();
         await canli.DegistiAsync("kullanici", kullanici.Id);
         return NoContent();
+    }
+
+    /// <summary>Gönderilen grup kimliklerinin gerçekten var olduğunu doğrular. Hata varsa mesajı döner.</summary>
+    private async Task<string?> GruplariDogrula(int[]? grupIdler)
+    {
+        var istenen = TemizGrupIdler(grupIdler);
+        if (istenen is null or { Count: 0 }) return null;
+        var bulunan = await db.Gruplar.Where(g => istenen.Contains(g.Id)).Select(g => g.Id).ToListAsync();
+        var eksik = istenen.Except(bulunan).ToList();
+        return eksik.Count == 0
+            ? null
+            : $"Seçilen meslek gruplarından bazıları bulunamadı (#{string.Join(", #", eksik)}).";
+    }
+
+    private static List<int>? TemizGrupIdler(int[]? grupIdler) =>
+        grupIdler is null ? null : grupIdler.Where(x => x > 0).Distinct().ToList();
+
+    /// <summary>
+    /// Çalışanın meslek grubu bağlarını gelen listeyle eşitler: listede olmayanlar silinir,
+    /// yeni olanlar eklenir, kalanların dosyadan gelen sırası korunur. <paramref name="grupIdler"/>
+    /// null ise (alanı hiç göndermeyen istemci) mevcut bağlara dokunulmaz.
+    /// Çağıranın ardından <c>SaveChangesAsync</c> çağırması gerekir.
+    /// </summary>
+    private async Task GruplariEsitle(Kullanici kullanici, int[]? grupIdler)
+    {
+        var istenen = TemizGrupIdler(grupIdler);
+        if (istenen is null) return;
+
+        var mevcut = await db.KullaniciGruplari.Where(b => b.KullaniciId == kullanici.Id).ToListAsync();
+        foreach (var bag in mevcut.Where(b => !istenen.Contains(b.GrupId)))
+            db.KullaniciGruplari.Remove(bag);
+        foreach (var grupId in istenen.Where(g => mevcut.All(b => b.GrupId != g)))
+            db.KullaniciGruplari.Add(new KullaniciGrup { KullaniciId = kullanici.Id, GrupId = grupId });
     }
 
     [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Yönetici")]
@@ -178,7 +244,10 @@ public class KullanicilarController(EtsoDbContext db, CanliBildirim canli) : Con
     }
 
     private static readonly string[] ExcelBasliklari =
-        ["Ad Soyad", "Kullanıcı Adı", "Rol", "Görev", "Birim", "E-posta", "Telefon", "Durum"];
+        ["Ad Soyad", "Kullanıcı Adı", "Rol", "Görev", "Birim", "E-posta", "Telefon", "Durum", "Meslek Grupları"];
+
+    /// <summary>Şablondaki "Meslek Grupları" sütununda birden çok grup bu işaretle ayrılır.</summary>
+    private const char GrupAyraci = ';';
 
     [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Yönetici")]
     [HttpGet("sablon")]
@@ -186,7 +255,8 @@ public class KullanicilarController(EtsoDbContext db, CanliBildirim canli) : Con
     {
         var ornek = new object?[][]
         {
-            ["Örnek Kullanıcı", "ornek.kullanici", "Görevli", "Üye Temsilcisi", "Saha", "ornek@erzto.org.tr", "0532 000 00 00", "Aktif"],
+            ["Örnek Kullanıcı", "ornek.kullanici", "Görevli", "Üye Temsilcisi", "Saha",
+             "ornek@erzto.org.tr", "0532 000 00 00", "Aktif", "1; 5. GRUP; SİGORTA FAALİYETLERİ"],
         };
         var dosya = ExcelServisi.Olustur("Kullanıcılar", ExcelBasliklari, ornek);
         return File(dosya, ExcelServisi.IcerikTipi, "kullanici-ice-aktarma-sablonu.xlsx");
@@ -196,10 +266,21 @@ public class KullanicilarController(EtsoDbContext db, CanliBildirim canli) : Con
     [HttpGet("disa-aktar")]
     public async Task<IActionResult> DisaAktar()
     {
-        var kayitlar = await db.Kullanicilar.AsNoTracking().OrderBy(k => k.AdSoyad).ToListAsync();
+        var kayitlar = await db.Kullanicilar.AsNoTracking()
+            .OrderBy(k => k.AdSoyad)
+            .Select(k => new
+            {
+                k.AdSoyad, k.KullaniciAdi, k.Rol, k.Gorev, k.Birim, k.Eposta, k.Telefon, k.Durum,
+                Gruplar = k.Gruplar
+                    .OrderBy(b => b.Sira ?? int.MaxValue).ThenBy(b => b.Grup!.No ?? int.MaxValue)
+                    .Select(b => b.Grup!.No != null ? b.Grup.No + ". GRUP" : b.Grup.Ad)
+                    .ToList(),
+            })
+            .ToListAsync();
         var satirlar = kayitlar.Select(k => new object?[]
         {
             k.AdSoyad, k.KullaniciAdi, k.Rol, k.Gorev, k.Birim, k.Eposta, k.Telefon, k.Durum,
+            string.Join($"{GrupAyraci} ", k.Gruplar),
         });
         var dosya = ExcelServisi.Olustur("Kullanıcılar", ExcelBasliklari, satirlar);
         return File(dosya, ExcelServisi.IcerikTipi, $"kullanici-raporu-{DateTime.Now:yyyyMMdd-HHmm}.xlsx");
@@ -233,10 +314,48 @@ public class KullanicilarController(EtsoDbContext db, CanliBildirim canli) : Con
         if (satirlar.Count == 0)
             return BadRequest(new { mesaj = "Dosyada veri satırı bulunamadı. Şablonu indirip doldurun." });
 
-        var mevcutlar = (await db.Kullanicilar.Select(k => k.KullaniciAdi).ToListAsync()).ToHashSet();
+        // Odanın "ETSO GRUPLAR" listesi (satır = grup, sütun = o gruba bakan kişiler) doğrudan
+        // yüklenebilir; başlıklarından tanınır ve kendi aktarıcısına verilir.
+        if (GrupCalisanIceAktarmaServisi.DosyaBuDuzendeMi(satirlar))
+        {
+            var grupSonucu = await GrupCalisanIceAktarmaServisi.AktarAsync(db, satirlar);
+            await canli.DegistiAsync("kullanici");
+            await canli.DegistiAsync("grup");
+            return Ok(grupSonucu);
+        }
+
+        return Ok(await SablonDuzeniniAktar(satirlar));
+    }
+
+    /// <summary>
+    /// Panelin kendi şablonundaki düzeni (satır = kişi) aktarır. Var olan kullanıcı kullanıcı
+    /// adından bulunur ve üzerine yazılır; böylece aynı dosya yeniden yüklenerek yalnızca
+    /// meslek grubu dağılımı güncellenebilir.
+    /// </summary>
+    private async Task<IceAktarmaSonucu> SablonDuzeniniAktar(
+        List<(int SatirNo, Dictionary<string, string> Degerler)> satirlar)
+    {
         var hatalar = new List<string>();
         var eklenen = 0;
+        var guncellenen = 0;
         var atlanan = 0;
+
+        var kullanicilar = await db.Kullanicilar.ToListAsync();
+        var adIndeksi = new Dictionary<string, Kullanici>();
+        foreach (var k in kullanicilar) adIndeksi.TryAdd(k.KullaniciAdi, k);
+
+        var gruplar = await db.Gruplar.AsNoTracking().Select(g => new { g.Id, g.No, g.Ad }).ToListAsync();
+        var grupNoIndeksi = new Dictionary<int, int>();
+        var grupAdIndeksi = new Dictionary<string, int>();
+        foreach (var g in gruplar)
+        {
+            if (g.No is not null) grupNoIndeksi.TryAdd(g.No.Value, g.Id);
+            grupAdIndeksi.TryAdd(ExcelServisi.Normalize(g.Ad), g.Id);
+        }
+
+        var mevcutBaglar = (await db.KullaniciGruplari.ToListAsync())
+            .GroupBy(b => b.KullaniciId)
+            .ToDictionary(g => g.Key, g => g.ToList());
 
         string? Al(Dictionary<string, string> d, string baslik) =>
             d.TryGetValue(ExcelServisi.Normalize(baslik), out var v) && !string.IsNullOrWhiteSpace(v) ? v.Trim() : null;
@@ -247,47 +366,134 @@ public class KullanicilarController(EtsoDbContext db, CanliBildirim canli) : Con
             if (adSoyad is null)
             {
                 hatalar.Add($"Satır {satirNo}: 'Ad Soyad' zorunludur.");
-                continue;
-            }
-            var kullaniciAdi = Al(degerler, "Kullanıcı Adı")?.ToLowerInvariant() ?? UretKullaniciAdi(adSoyad);
-            if (!mevcutlar.Add(kullaniciAdi))
-            {
                 atlanan++;
                 continue;
             }
-            var rol = Al(degerler, "Rol") ?? "Görevli";
-            if (rol != "Yönetici" && rol != "Görevli")
+            var kullaniciAdi = Al(degerler, "Kullanıcı Adı")?.ToLowerInvariant() ?? UretKullaniciAdi(adSoyad);
+
+            var rol = Al(degerler, "Rol");
+            if (rol is not null && !GecerliRoller.Contains(rol))
             {
                 hatalar.Add($"Satır {satirNo}: '{rol}' geçersiz rol, 'Görevli' olarak kaydedildi.");
-                rol = "Görevli";
+                rol = Kullanici.CalisanRolu;
             }
-            var durum = Al(degerler, "Durum") ?? "Aktif";
-            if (durum != "Aktif" && durum != "Pasif") durum = "Aktif";
+            var durum = Al(degerler, "Durum");
+            if (durum is not null && !GecerliDurumlar.Contains(durum)) durum = "Aktif";
 
-            db.Kullanicilar.Add(new Kullanici
+            // ---- Meslek grupları ----
+            List<int>? grupIdler = null;
+            var grupMetni = Al(degerler, "Meslek Grupları");
+            if (grupMetni is not null)
+            {
+                grupIdler = [];
+                foreach (var parca in grupMetni.Split(GrupAyraci, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    var id = GrubuCoz(parca, grupNoIndeksi, grupAdIndeksi);
+                    if (id is null) hatalar.Add($"Satır {satirNo}: \"{parca}\" adlı/numaralı meslek grubu bulunamadı, atlandı.");
+                    else if (!grupIdler.Contains(id.Value)) grupIdler.Add(id.Value);
+                }
+            }
+
+            if (adIndeksi.TryGetValue(kullaniciAdi, out var mevcut))
+            {
+                var degisti = false;
+                // Dosyada boş bırakılan hücre "değiştirme" demektir; yalnızca dolu alanlar yazılır.
+                void Yaz(string? eski, string? yeni, Action<string> ata)
+                {
+                    if (yeni is null || eski == yeni) return;
+                    ata(yeni);
+                    degisti = true;
+                }
+                Yaz(mevcut.AdSoyad, adSoyad, v => mevcut.AdSoyad = v);
+                Yaz(mevcut.Gorev, Al(degerler, "Görev"), v => mevcut.Gorev = v);
+                Yaz(mevcut.Birim, Al(degerler, "Birim"), v => mevcut.Birim = v);
+                Yaz(mevcut.Eposta, Al(degerler, "E-posta"), v => mevcut.Eposta = v);
+                Yaz(mevcut.Telefon, Al(degerler, "Telefon"), v => mevcut.Telefon = v);
+
+                // Son aktif yöneticinin yetkisi/durumu dosyayla düşürülemez; aksi halde
+                // bir içe aktarma herkesi paneldan kilitleyebilirdi.
+                var yoneticilikBitiyor = mevcut.Rol == Kullanici.YoneticiRolu && mevcut.Durum == "Aktif"
+                    && ((rol is not null && rol != Kullanici.YoneticiRolu) || (durum is not null && durum != "Aktif"));
+                if (yoneticilikBitiyor && !await BaskaAktifYoneticiVarMi(mevcut.Id))
+                    hatalar.Add($"Satır {satirNo}: \"{mevcut.AdSoyad}\" sistemdeki son aktif yönetici; " +
+                                "rolü ve durumu dosyadaki değerlerle değiştirilmedi.");
+                else
+                {
+                    Yaz(mevcut.Rol, rol, v => mevcut.Rol = v);
+                    Yaz(mevcut.Durum, durum, v => mevcut.Durum = v);
+                }
+
+                if (GruplariUygula(mevcut.Id, grupIdler, mevcutBaglar)) degisti = true;
+                if (degisti) guncellenen++; else atlanan++;
+                continue;
+            }
+
+            var kullanici = new Kullanici
             {
                 AdSoyad = adSoyad,
                 KullaniciAdi = kullaniciAdi,
-                Rol = rol,
+                Rol = rol ?? Kullanici.CalisanRolu,
                 Gorev = Al(degerler, "Görev"),
                 Birim = Al(degerler, "Birim"),
                 Eposta = Al(degerler, "E-posta"),
                 Telefon = Al(degerler, "Telefon"),
-                Durum = durum,
-            });
+                Durum = durum ?? "Aktif",
+            };
+            // Şifresiz çalışan kaydında da hash rastgele üretilir (bkz. Olustur).
+            kullanici.SifreHash = AuthController.Hashle(kullanici,
+                Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)));
+            db.Kullanicilar.Add(kullanici);
+            adIndeksi[kullaniciAdi] = kullanici;
             eklenen++;
+            // Grup bağları için Id gerekiyor.
+            await db.SaveChangesAsync();
+            GruplariUygula(kullanici.Id, grupIdler, mevcutBaglar);
         }
 
         await db.SaveChangesAsync();
         await canli.DegistiAsync("kullanici");
-        return Ok(new IceAktarmaSonucu(eklenen, atlanan, hatalar));
+        return new IceAktarmaSonucu(eklenen, atlanan, hatalar, guncellenen);
     }
 
-    private static string UretKullaniciAdi(string adSoyad)
+    /// <summary>Bir kullanıcının grup bağlarını dosyadaki listeyle eşitler. Değişiklik oldu mu döner.</summary>
+    private bool GruplariUygula(int kullaniciId, List<int>? grupIdler, Dictionary<int, List<KullaniciGrup>> mevcutBaglar)
     {
-        var normal = adSoyad.Trim().ToLowerInvariant()
-            .Replace("ç", "c").Replace("ğ", "g").Replace("ı", "i")
-            .Replace("ö", "o").Replace("ş", "s").Replace("ü", "u");
-        return string.Join(".", normal.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        // Sütun hiç doldurulmamışsa mevcut dağılım korunur; boş bırakmak "hepsini sil" demek değildir.
+        if (grupIdler is null) return false;
+        if (!mevcutBaglar.TryGetValue(kullaniciId, out var baglar)) baglar = mevcutBaglar[kullaniciId] = [];
+
+        var degisti = false;
+        foreach (var bag in baglar.Where(b => !grupIdler.Contains(b.GrupId)).ToList())
+        {
+            db.KullaniciGruplari.Remove(bag);
+            baglar.Remove(bag);
+            degisti = true;
+        }
+        foreach (var grupId in grupIdler.Where(g => baglar.All(b => b.GrupId != g)))
+        {
+            var yeni = new KullaniciGrup { KullaniciId = kullaniciId, GrupId = grupId };
+            db.KullaniciGruplari.Add(yeni);
+            baglar.Add(yeni);
+            degisti = true;
+        }
+        return degisti;
     }
+
+    /// <summary>"5", "5. GRUP" veya grubun tam adı → grup kimliği.</summary>
+    private static int? GrubuCoz(string parca, Dictionary<int, int> noIndeksi, Dictionary<string, int> adIndeksi)
+    {
+        var rakamlar = new string(parca.TakeWhile(char.IsDigit).ToArray());
+        if (rakamlar.Length > 0 && int.TryParse(rakamlar, out var no)
+            && ExcelServisi.Normalize(parca[rakamlar.Length..]) is "" or "grup"
+            && noIndeksi.TryGetValue(no, out var idNo))
+            return idNo;
+        return adIndeksi.TryGetValue(ExcelServisi.Normalize(parca), out var idAd) ? idAd : null;
+    }
+
+    /// <summary>
+    /// "İdris Akdemir" → "idris.akdemir". Türkçe 'İ' harfinin küçültme tuzağı için
+    /// bkz. <see cref="GrupCalisanIceAktarmaServisi.KullaniciAdiUret"/>.
+    /// </summary>
+    private static string UretKullaniciAdi(string adSoyad) =>
+        GrupCalisanIceAktarmaServisi.KullaniciAdiUret(adSoyad);
 }

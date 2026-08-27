@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil, Phone, Plus, SquarePen, Trash2, UsersRound } from "lucide-react";
+import { Ban, Pencil, Phone, Plus, SquarePen, Trash2, UsersRound } from "lucide-react";
 import { Modal } from "./modal";
 import { durumTonu, tarihGoster, EsnafYetkilisi } from "@/lib/api";
 
@@ -19,7 +19,7 @@ export interface DetayGorusme {
  * Üye kartı. Görüşmeler ayrı bir sayfa değil, üyenin kendi ekranında yönetilir:
  * geçmiş burada listelenir, yeni görüşme buradan eklenir, kayıtlar buradan düzenlenir/silinir.
  */
-export function DetailModal({ open, baslik, satirlar, yetkililer, birincilYetkili, gorusmeler, onClose, onDuzenle, onGorusmeEkle, onGorusmeDuzenle, onGorusmeSil }: {
+export function DetailModal({ open, baslik, satirlar, yetkililer, birincilYetkili, gorusmeler, onClose, onDuzenle, onGorusmeEkle, gorusmeEngeli, onGorusmeDuzenle, onGorusmeSil }: {
   open: boolean; baslik: string; satirlar: DetaySatiri[];
   /** Üyenin oda kaydındaki tüm yetkilileri. Tek yetkili varsa bölüm gösterilmez (özette zaten var). */
   yetkililer?: EsnafYetkilisi[];
@@ -29,6 +29,8 @@ export function DetailModal({ open, baslik, satirlar, yetkililer, birincilYetkil
   /** Üyelik durumu düzenleme ekranını açar. Yalnızca üye kartında bulunur. */
   onDuzenle?: () => void;
   onGorusmeEkle?: () => void;
+  /** Dolu ise "Yeni Görüşme" düğmesi kilitlenir ve sebebi yazılır (ör. üyelik askıda). */
+  gorusmeEngeli?: string;
   onGorusmeDuzenle?: (g: DetayGorusme) => void;
   onGorusmeSil?: (g: DetayGorusme) => void;
 }) {
@@ -77,15 +79,20 @@ export function DetailModal({ open, baslik, satirlar, yetkililer, birincilYetkil
       {gorusmeler && <section className="gorusme-bolumu">
         <header>
           <h3>Görüşmeler ({gorusmeler.length})</h3>
-          {onGorusmeEkle && <button type="button" className="dark-button" onClick={onGorusmeEkle}>
+          {onGorusmeEkle && <button type="button" className="dark-button" onClick={onGorusmeEkle}
+            disabled={!!gorusmeEngeli} title={gorusmeEngeli || "Bu üyeye yeni görüşme ekle"}>
             <Plus size={16} />Yeni Görüşme
           </button>}
         </header>
+        {/* Sunucu da aynı kuralı uygular; buradaki uyarı yalnızca sebebi görünür kılar. */}
+        {gorusmeEngeli && <p className="gorusme-engeli" role="note"><Ban size={15} />{gorusmeEngeli}</p>}
         {gorusmeler.length === 0
-          ? <p className="gorusme-bos">Bu üyeyle henüz görüşme yapılmamış. &quot;Yeni Görüşme&quot; ile ilk kaydı ekleyin.</p>
+          ? <p className="gorusme-bos">{gorusmeEngeli
+              ? "Bu üyeyle görüşme kaydı yok."
+              : "Bu üyeyle henüz görüşme yapılmamış. \"Yeni Görüşme\" ile ilk kaydı ekleyin."}</p>
           : <div className="table-scroll"><table>
             <thead><tr>
-              <th>Görüşme</th><th>Görüşen Çalışan</th><th>Görüşecek Kişi</th><th>Tarih</th><th>Sonuç</th><th>Takip Durumu</th><th>Not</th>
+              <th>Görüşme</th><th>Görüşen Çalışan</th><th>Görüşecek Kişi</th><th>Tarih</th><th>Sonuç</th><th>Not</th>
               {(onGorusmeDuzenle || onGorusmeSil) && <th>İşlemler</th>}
             </tr></thead>
             <tbody>{gorusmeler.map(g => <tr key={g.id}>
@@ -93,10 +100,9 @@ export function DetailModal({ open, baslik, satirlar, yetkililer, birincilYetkil
               <td>{g.gorevli ?? "-"}</td>
               <td>{g.ikinciGorevli ?? "-"}</td>
               <td>{tarihGoster(g.tarih)}</td>
+              {/* Takip bilgisi ayrı bir sütun değil: "Takip Edilecek" / "Gelmeyecek"
+                  görüşme sonucunun kendi seçenekleri arasına alındı. */}
               <td><span className={`badge ${durumTonu(g.sonuc)}`}>{g.sonuc}</span></td>
-              {/* Sunucuda bool tutulur: true = "Takip Edilecek", false = "Gelmeyecek". */}
-              <td><span className={`badge ${g.takipGerekli ? "warning" : "neutral"}`}>
-                {g.takipGerekli ? "Takip Edilecek" : "Gelmeyecek"}</span></td>
               <td className="gorusme-not">{g.not || "-"}</td>
               {(onGorusmeDuzenle || onGorusmeSil) && <td><div className="row-actions">
                 {onGorusmeDuzenle && <button type="button" aria-label="Görüşmeyi düzenle" title="Düzenle"

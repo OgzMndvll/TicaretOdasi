@@ -7,7 +7,7 @@ import { CalisanRaporu } from "./calisan-raporu";
 import { BarList, DonutChart, LineChart } from "@/components/ui/charts";
 import { StatCard } from "@/components/ui/stat-card";
 import { Toast } from "@/components/ui/toast";
-import { api, API_ERISIM_HATASI, DashboardOzet, GrupRaporSatiri, sayiGoster, yuzde } from "@/lib/api";
+import { api, API_ERISIM_HATASI, grupEtiketi, DashboardOzet, GrupRaporSatiri, sayiGoster, yuzde } from "@/lib/api";
 import { useCanliYenileme } from "@/lib/canli";
 
 export function ReportsPage() {
@@ -43,6 +43,8 @@ export function ReportsPage() {
           { label: "Onay Veren", value: ozet.onayVeren, color: "green" },
           { label: "Onay Vermeyen", value: ozet.onayVermeyen, color: "red" },
           { label: "Kararsız", value: ozet.kararsiz, color: "orange" },
+          { label: "Takip Edilecek", value: ozet.takipEdilecek, color: "blue" },
+          { label: "Gelmeyecek", value: ozet.gelmeyecek, color: "brown" },
           { label: "Görüşülmemiş", value: ozet.gorusulmemis, color: "gray" },
         ] : []} />
       </section>
@@ -60,10 +62,13 @@ export function ReportsPage() {
         </button>
       </div>
       <div className="table-scroll"><table>
-      <thead><tr><th>No</th><th>Grup / Meslek Grubu</th><th>Toplam Üye</th><th>Görüşme</th><th>Onaylayan</th><th>Reddedilen</th><th>Kararsız</th><th>Görüşülmeyen</th><th>Onay Oranı</th></tr></thead>
+      <thead><tr><th>Meslek Grubu</th><th>Toplam Üye</th><th>Görüşme</th><th>Onaylayan</th><th>Reddedilen</th><th>Kararsız</th><th>Takip Edilecek</th><th>Gelmeyecek</th><th>Görüşülmeyen</th><th>Onay Oranı</th></tr></thead>
       <tbody>{rapor.map(r => <tr key={r.id}>
-        <td>{r.no ?? "-"}</td><td><strong>{r.ad}</strong></td><td>{sayiGoster(r.toplamEsnaf)}</td><td>{sayiGoster(r.gorusme)}</td>
-        <td>{sayiGoster(r.onaylayan)}</td><td>{sayiGoster(r.reddedilen)}</td><td>{sayiGoster(r.kararsiz)}</td><td>{sayiGoster(r.gorusulmeyen)}</td>
+        {/* Sektör adı satırın kendisinde değil, ipucunda: gruplar numarasıyla anılıyor. */}
+        <td title={r.ad}><strong>{grupEtiketi(r.no, r.ad)}</strong></td>
+        <td>{sayiGoster(r.toplamEsnaf)}</td><td>{sayiGoster(r.gorusme)}</td>
+        <td>{sayiGoster(r.onaylayan)}</td><td>{sayiGoster(r.reddedilen)}</td><td>{sayiGoster(r.kararsiz)}</td>
+        <td>{sayiGoster(r.takipEdilecek)}</td><td>{sayiGoster(r.gelmeyecek)}</td><td>{sayiGoster(r.gorusulmeyen)}</td>
         <td><span className="ratio"><i style={{ width: `${Math.min(100, r.onayOrani)}%` }} />%{r.onayOrani.toLocaleString("tr-TR")}</span></td>
       </tr>)}</tbody>
     </table></div></section>

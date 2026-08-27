@@ -1,7 +1,8 @@
-export interface DonutSegment { label: string; value: number; color: "blue" | "green" | "orange" | "red" | "gray" }
+/** "brown", "Gelmeyecek" içindir: kırmızı "Onay Vermeyen" dilimiyle karışmaz. */
+export interface DonutSegment { label: string; value: number; color: "blue" | "green" | "orange" | "red" | "brown" | "gray" }
 
 const RENKLER: Record<DonutSegment["color"], string> = {
-  blue: "#1767e8", green: "#36a657", orange: "#ff9b17", red: "#e84235", gray: "#cbd2dd",
+  blue: "#1767e8", green: "#36a657", orange: "#ff9b17", red: "#e84235", brown: "#8a5a2b", gray: "#cbd2dd",
 };
 
 export function DonutChart({ segments }: { segments: DonutSegment[] }) {
