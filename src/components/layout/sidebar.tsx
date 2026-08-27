@@ -35,7 +35,6 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
             silüetine karışmasın diye kendi koyu levhasının üstüne oturtulur. */}
         <a className="sidebar-ajans" href="https://ajansorkestra.com.tr" target="_blank" rel="noopener noreferrer"
           aria-label="Ajans Orkestra — yeni sekmede açılır">
-          <b>Hazırlayan</b>
           <Image src={varlik("/sidebar-ajans.png")} alt="Ajans Orkestra" width={940} height={94} />
         </a>
       </aside>
