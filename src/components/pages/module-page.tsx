@@ -769,8 +769,13 @@ function SatirIslemleri({ kayit, edit = true, onGoster, onDuzenle, onSil }: {
   </div>;
 }
 
-/** Üyenin onay durumuna göre tablo satırının rengi. */
-function satirTonu(durum?: string | null): string {
+/**
+ * Tablo satırının rengi. Askıdaki üyeler onay durumundan bağımsız olarak mavi görünür:
+ * üyelik askıdaysa görüşmenin sonucu ikinci plandadır. Onay durumu yine de satırdaki
+ * "Onay Durumu" rozetinden okunur, yani bilgi kaybolmaz.
+ */
+function satirTonu(durum?: string | null, uyelikDurumu?: string | null): string {
+  if (uyelikDurumu === "Askı") return "satir-aski";
   switch (durum) {
     case "Onay Verdi": return "satir-onayli";
     case "Onay Vermedi": return "satir-red";
@@ -835,10 +840,10 @@ function ModuleTable({ kind, kayitlar, yukleniyor, onKarar, onGoster, onDuzenle,
   const liste = kayitlar as EsnafKaydi[];
   return <div className="table-scroll"><table>
     <thead><tr><th>Sicil No</th><th>Unvan / Yetkili</th><th>Meslek Grubu</th><th>Üyelik Durumu</th><th>Telefon</th><th>İlçe</th><th>Görevli</th><th>Son Görüşme</th><th>Onay Durumu</th></tr></thead>
-    {/* Satıra tıklayınca üyenin görüşme ekranı açılır; satır rengi üyenin onay durumunu gösterir.
+    {/* Satıra tıklayınca üyenin görüşme ekranı açılır; satır rengi üyelik/onay durumunu gösterir.
         "İşlemler" sütunu kaldırıldı: üyeyle ilgili tüm işlemler üye kartından yürütülür. */}
     <tbody>{!liste.length ? <Bos yukleniyor={yukleniyor} sutun={9} /> : liste.map(e => <tr key={e.id}
-      className={`tiklanabilir ${satirTonu(e.durum)}`} onClick={() => onGoster(e)}
+      className={`tiklanabilir ${satirTonu(e.durum, e.uyelikDurumu)}`} onClick={() => onGoster(e)}
       title="Görüşmeleri aç">
       <td>{e.uyeSicilNo ?? "-"}</td>
       <td><strong>{e.isletme}</strong><small>{e.adSoyad}{e.gorevi ? ` — ${e.gorevi}` : ""}

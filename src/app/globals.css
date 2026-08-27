@@ -945,3 +945,14 @@ tr.satir-onayli .badge,tr.satir-red .badge,tr.satir-kararsiz .badge{box-shadow:0
    Alttan boşluk vererek bloğu ortanın üstüne çeker (padding, ortalamayı bozmadan kaydırır). */
 .giris-tanitim-icerik{padding-bottom:14vh}
 @media(max-height:780px){.giris-tanitim-icerik{padding-bottom:9vh}}
+
+/* ── Askıdaki üye satırı ──────────────────────────────────────────────────────
+   Üyelik askıdaysa satır onay durumundan bağımsız olarak mavi görünür; yeşil/kırmızı/sarı
+   tonlarından net biçimde ayrışır. Onay durumu satırdaki rozetten okunmaya devam eder.
+   Bu kurallar dosyanın sonunda durmalı: `tr.tiklanabilir:hover` ile aynı özgüllükteler. */
+tr.satir-aski{background:#b9d9f7}
+tr.satir-aski>td:first-child{border-left:5px solid #0b4f9e}
+tr.satir-aski:hover,tr.tiklanabilir.satir-aski:hover{background:#9bc8f2}
+/* Renkli zeminde soluk gri alt metin okunmuyordu. */
+tr.satir-aski td small{color:#33455f}
+tr.satir-aski .badge{box-shadow:0 0 0 1px rgba(255,255,255,.75)}
