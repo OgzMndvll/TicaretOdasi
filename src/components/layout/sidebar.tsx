@@ -5,12 +5,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { X } from "lucide-react";
 import { navigation } from "@/lib/navigation";
+import { sistemYoneticisiMi } from "@/lib/auth";
 import { varlik } from "@/lib/yol";
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
-  // Panele yalnızca yönetici girdiği için menünün tamamı görünür.
-  const menu = navigation;
+  // Herkes aynı ekranları görür; kullanıcı yönetimi, ayarlar ve işlem kayıtları
+  // yalnızca sistem yöneticisine açıktır (bkz. lib/navigation.ts).
+  const sistemYoneticisi = sistemYoneticisiMi();
+  const menu = navigation.filter(m => !m.sistemYonetimi || sistemYoneticisi);
   return (
     <>
       <button className={`sidebar-scrim ${open ? "show" : ""}`} onClick={onClose} aria-label="Menüyü kapat" />

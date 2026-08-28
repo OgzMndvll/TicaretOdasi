@@ -134,6 +134,8 @@ export interface KullaniciKaydi {
   id: number; adSoyad: string; kullaniciAdi: string; rol: string;
   gorev?: string | null; birim?: string | null; eposta?: string | null;
   telefon?: string | null; durum: string;
+  /** Kullanıcı/şifre yönetimi, Ayarlar ve İşlem Kayıtları yetkisi. */
+  sistemYoneticisi?: boolean;
   /** Çalışanın bakmakla yükümlü olduğu meslek grupları. */
   gruplar?: CalisanGrubu[];
 }
@@ -155,6 +157,19 @@ export interface OnayKaydi {
   esnafId: number; esnaf: string; isletme: string; grup?: string | null;
   ilce?: string | null; mahalle?: string | null; telefon?: string | null;
   gorevliId?: number | null; gorevli?: string | null;
+}
+
+/** Denetim kaydı: kim, hangi üyede, ne zaman, hangi işlemi yaptı. */
+export interface IslemKaydi {
+  id: number; tarih: string; islem: string; detay?: string | null;
+  kullaniciId?: number | null; kullaniciAdi: string; kullaniciAdSoyad: string;
+  /** Üye silinmiş olabilir: kimlik boşalır ama unvan kopyası kalır. */
+  esnafId?: number | null; esnafUnvan?: string | null;
+}
+
+export interface IslemKaydiSecenekleri {
+  kullanicilar: { id: number; adSoyad: string; adet: number }[];
+  islemler: string[];
 }
 
 export interface DashboardOzet {

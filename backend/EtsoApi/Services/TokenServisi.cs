@@ -10,6 +10,11 @@ public class TokenServisi(IConfiguration config)
 {
     public const string RolClaim = "rol";
     public const string AdSoyadClaim = "adSoyad";
+    /// <summary>Kullanıcı/şifre yönetimi ve ayarlar yetkisi (bkz. KimlikUzantilari.SistemYoneticisi).</summary>
+    public const string SistemYoneticisiClaim = "sistemYoneticisi";
+
+    /// <summary>Yetkiyi arayan yetkilendirme politikasının adı.</summary>
+    public const string SistemYonetimiPolitikasi = "SistemYonetimi";
 
     public static byte[] AnahtarBaytlari(IConfiguration config)
     {
@@ -30,6 +35,10 @@ public class TokenServisi(IConfiguration config)
             new Claim(JwtRegisteredClaimNames.UniqueName, kullanici.KullaniciAdi),
             new Claim(AdSoyadClaim, kullanici.AdSoyad),
             new Claim(RolClaim, kullanici.Rol),
+            // Bayrak jetona yazılır, ama her istekte veritabanındaki güncel değerle
+            // karşılaştırılır (bkz. Program.cs OnTokenValidated): yetkisi alınan bir
+            // kullanıcının elindeki eski jeton anında geçersiz olur.
+            new Claim(SistemYoneticisiClaim, kullanici.SistemYoneticisi ? "true" : "false"),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
         ]);
         var tanim = new SecurityTokenDescriptor

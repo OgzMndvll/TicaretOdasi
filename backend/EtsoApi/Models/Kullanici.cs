@@ -17,6 +17,15 @@ public class Kullanici
     public string? Eposta { get; set; }
     public string? Telefon { get; set; }
     public string Durum { get; set; } = "Aktif";
+
+    /// <summary>
+    /// Kullanıcı/şifre yönetimi, sistem ayarları ve işlem kayıtları yetkisi. Panele giren
+    /// herkes "Yönetici" rolündedir ve aynı ekranları görür; bu bayrak yalnızca hesap açma,
+    /// şifre belirleme, Ayarlar ve İşlem Kayıtları ekranlarını açar. En az bir kullanıcıda
+    /// açık kalması güvence altındadır (bkz. KullanicilarController).
+    /// </summary>
+    public bool SistemYoneticisi { get; set; }
+
     public DateTime OlusturmaTarihi { get; set; } = DateTime.UtcNow;
 
     /// <summary>

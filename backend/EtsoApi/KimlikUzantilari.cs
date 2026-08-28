@@ -12,4 +12,19 @@ public static class KimlikUzantilari
     }
 
     public static bool Yonetici(this ClaimsPrincipal user) => user.IsInRole("Yönetici");
+
+    /// <summary>Oturumdaki kullanıcı adı (denetim kaydı için).</summary>
+    public static string? KullaniciAdiniAl(this ClaimsPrincipal user) =>
+        user.FindFirstValue("unique_name") ?? user.FindFirstValue(ClaimTypes.Name);
+
+    public static string? AdSoyadiniAl(this ClaimsPrincipal user) =>
+        user.FindFirstValue(Services.TokenServisi.AdSoyadClaim);
+
+    /// <summary>
+    /// Kullanıcı/şifre yönetimi ve sistem ayarları yetkisi. Panele giren herkes "Yönetici"dir
+    /// ve aynı ekranları görür; bu bayrak yalnızca hesap açma, şifre belirleme, ayarlar ve
+    /// işlem kayıtları için aranır.
+    /// </summary>
+    public static bool SistemYoneticisi(this ClaimsPrincipal user) =>
+        user.FindFirstValue(Services.TokenServisi.SistemYoneticisiClaim) == "true";
 }

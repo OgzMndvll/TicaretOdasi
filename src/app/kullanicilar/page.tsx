@@ -1,4 +1,2 @@
-import { redirect } from "next/navigation";
-
-// Kullanıcılar ekranı "Aktif Çalışanlar" olarak yeniden adlandırıldı; eski bağlantılar yönlendirilir.
-export default function Page() { redirect("/calisanlar"); }
+import { KullanicilarPage } from "@/components/pages/kullanicilar-page";
+export default function Page() { return <KullanicilarPage />; }

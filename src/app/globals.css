@@ -1024,3 +1024,30 @@ tr.satir-gelmeyecek .badge{box-shadow:0 0 0 1px rgba(255,255,255,.7)}
 }
 .gorusme-engeli>svg{flex:0 0 auto}
 .gorusme-bolumu .dark-button:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+
+/* ── Kullanıcılar ekranı: sistem yöneticisi anahtarı ──────────────────────────
+   Tablo içinde yer kaplamayan küçük bir aç/kapa. Devre dışıyken (kendi hesabı)
+   soluklaşır: kullanıcı kendi yetkisini elinden alıp ekranı kilitleyemez. */
+.yetki-anahtari{display:inline-flex;align-items:center;cursor:pointer}
+.yetki-anahtari input{display:none}
+.yetki-anahtari i{width:34px;height:19px;border-radius:10px;background:#cbd3df;position:relative;transition:background .18s}
+.yetki-anahtari i:after{
+  content:"";position:absolute;width:15px;height:15px;border-radius:50%;background:#fff;
+  top:2px;left:2px;transition:left .18s;box-shadow:0 1px 2px rgba(0,0,0,.2);
+}
+.yetki-anahtari input:checked+i{background:var(--purple)}
+.yetki-anahtari input:checked+i:after{left:17px}
+.yetki-anahtari input:disabled+i{opacity:.45;cursor:not-allowed}
+
+/* Yeni kullanıcı formundaki yetki kutusu. */
+.yetki-secimi{
+  display:flex;align-items:flex-start;gap:11px;margin-top:16px;padding:13px 14px;
+  border:1px solid #e0d5f6;border-radius:7px;background:#faf7ff;cursor:pointer;
+}
+.yetki-secimi input{margin-top:2px;width:16px;height:16px;accent-color:var(--purple);flex:0 0 auto}
+.yetki-secimi div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.yetki-secimi b{font-size:12px;color:#4a2a86}
+.yetki-secimi small{font-size:11px;color:#6b5a8a;line-height:1.5}
+
+/* İşlem kayıtları tablosunda ayrıntı sütunu uzun olabilir. */
+.row-actions button:disabled{opacity:.4;cursor:not-allowed}

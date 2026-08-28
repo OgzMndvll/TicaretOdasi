@@ -6,6 +6,7 @@ import { CokluSecim } from "./coklu-secim";
 import { EsnafSecici } from "./esnaf-secici";
 import { FormField, Modal } from "./modal";
 import { api, ApiError, grupEtiketi, ODEME_SECENEKLERI, ODENDI, GrupKaydi, KullaniciKaydi } from "@/lib/api";
+import { sistemYoneticisiMi } from "@/lib/auth";
 import { ILLER, ilceleriGetir } from "@/lib/il-ilce";
 
 type Alan = {
@@ -16,6 +17,8 @@ type Alan = {
   zorunlu?: boolean;
   secenekKaynagi?: "gruplar" | "gorevliler" | "esnaflar" | "sabit" | "iller" | "ilceler" | "gorusmeSirasi";
   sabitSecenekler?: string[];
+  /** true: alan yalnızca sistem yöneticisine gösterilir (şifre gibi hesap alanları). */
+  sistemYonetimi?: boolean;
 };
 
 /** Telefon: 0 ile başlayan 11 hane (05XX XXX XX XX). Rakam dışı her şey atılır, fazlası kesilir. */
@@ -148,7 +151,9 @@ export const formlar: Record<string, FormTanimi> = {
   "Yeni Çalışan Ekle": {
     // Şifre yalnızca panele girecek Yönetici hesapları için gereklidir; çalışan kaydı şifresiz açılır
     // ve giriş yapamaz, yalnızca görüşmelerde seçilir.
-    alanlar: [...kullaniciAlanlari, { name: "sifre", label: "Geçici Şifre (yalnızca Yönetici için; en az 10 karakter, büyük/küçük harf ve rakam)", tip: "password" }],
+    // Şifre alanı yalnızca sistem yöneticisinde görünür: giriş yapabilen hesap açmak ona özeldir.
+    // Diğer yöneticiler buradan yalnızca şifresiz görevli kaydı ekler.
+    alanlar: [...kullaniciAlanlari, { name: "sifre", label: "Geçici Şifre (yalnızca Yönetici için; en az 10 karakter, büyük/küçük harf ve rakam)", tip: "password", sistemYonetimi: true }],
     buton: "Çalışanı Kaydet",
     // Kullanıcı adını sunucu Ad Soyad'dan türetir; yöneticinin bilemeyeceği tek bilgi budur ve
     // başarı bildiriminde gösterilir. Şifreyi yönetici zaten kendisi yazdığı için tekrar gösterilmez.
@@ -307,7 +312,11 @@ export function ActionModal({ action, duzenleme, open, onClose, onSuccess, onSav
         }));
       }
       default: {
-        const sabit = alan.sabitSecenekler ?? [];
+        // "Yönetici" rolü panele giriş demektir; bu seçeneği yalnızca sistem yöneticisi görür.
+        // Diğerleri görevli (şifresiz, giriş yapamayan) kaydı açabilir.
+        const sabit = alan.name === "rol" && !sistemYoneticisiMi()
+          ? (alan.sabitSecenekler ?? []).filter(x => x !== "Yönetici")
+          : alan.sabitSecenekler ?? [];
         // Kaydın mevcut değeri sabit listede yoksa (ör. karar bekleyen görevlendirme) seçili kalabilmesi
         // için listeye eklenir; aksi halde zorunlu alan boş açılır ve form gönderilemez.
         const mevcut = degerler[alan.name];
@@ -345,7 +354,8 @@ export function ActionModal({ action, duzenleme, open, onClose, onSuccess, onSav
 
   // Panele yalnızca yönetici girdiği için görüşmeyi kimin yaptığı her zaman elle seçilir.
   const kisitli = false;
-  const gosterilecekAlanlar = form.alanlar;
+  // Hesap alanları (şifre) yalnızca sistem yöneticisinde çizilir; sunucu da aynı kuralı uygular.
+  const gosterilecekAlanlar = form.alanlar.filter(a => !a.sistemYonetimi || sistemYoneticisiMi());
 
   return <Modal open={open} title={baslik} onClose={onClose}>
     <form className="action-form" onSubmit={submit} autoComplete="off" key={duzenleme ? `d-${duzenleme.form}-${duzenleme.id}` : action}>

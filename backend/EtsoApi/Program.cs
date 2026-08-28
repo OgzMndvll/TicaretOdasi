@@ -34,6 +34,9 @@ builder.Services.AddSingleton<TokenServisi>();
 // panel de veriyi kendi yetkisiyle yeniden okur (bkz. Hubs/PanelHub.cs).
 builder.Services.AddSignalR();
 builder.Services.AddScoped<CanliBildirim>();
+// Denetim kaydı "kim" bilgisini istekteki jetondan okur.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IslemGunlugu>();
 
 // Ters vekil (nginx vb.) arkasında gerçek istemci IP'si — rate limit'in doğru çalışması için şart.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -89,7 +92,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
                 var kullanici = await db.Kullanicilar.AsNoTracking()
                     .Where(k => k.Id == id)
-                    .Select(k => new { k.Rol, k.Durum, k.SifreGuncelleme })
+                    .Select(k => new { k.Rol, k.Durum, k.SifreGuncelleme, k.SistemYoneticisi })
                     .FirstOrDefaultAsync();
 
                 if (kullanici is null) { ctx.Fail("Kullanıcı bulunamadı."); return; }
@@ -97,6 +100,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
                 // Rol token'da donmuş olabilir; yetki her zaman veritabanındaki güncel role göre verilir.
                 if (ctx.Principal!.FindFirst(TokenServisi.RolClaim)?.Value != kullanici.Rol)
+                { ctx.Fail("Yetki değişti, yeniden giriş yapın."); return; }
+
+                // Sistem yöneticisi bayrağı da aynı şekilde: yetki alınan bir kullanıcının elindeki
+                // token, bayrağı hâlâ "true" taşısa bile geçersiz sayılır.
+                var bayrak = ctx.Principal!.FindFirst(TokenServisi.SistemYoneticisiClaim)?.Value == "true";
+                if (bayrak != kullanici.SistemYoneticisi)
                 { ctx.Fail("Yetki değişti, yeniden giriş yapın."); return; }
 
                 // Şifre değiştirildiyse/sıfırlandıysa, o andan önce üretilmiş tüm token'lar geçersizdir.
@@ -123,10 +132,19 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 // yönetici olmayan hiçbir istek hiçbir endpoint'e ulaşamaz. Çalışan kayıtları görüşmelerde
 // seçilmek içindir, giriş yapmazlar. İstisnalar (giriş vb.) [AllowAnonymous] ile tek tek açılır.
 builder.Services.AddAuthorization(options =>
+{
     options.FallbackPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .RequireRole(EtsoApi.Models.Kullanici.YoneticiRolu)
-        .Build());
+        .Build();
+
+    // Hesap açma, şifre belirleme, sistem ayarları ve işlem kayıtları. Panele giren herkes
+    // "Yönetici"dir ve aynı ekranları görür; bu politika o ekranların üstüne ikinci bir kilittir.
+    options.AddPolicy(TokenServisi.SistemYonetimiPolitikasi, kural => kural
+        .RequireAuthenticatedUser()
+        .RequireRole(EtsoApi.Models.Kullanici.YoneticiRolu)
+        .RequireClaim(TokenServisi.SistemYoneticisiClaim, "true"));
+});
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -335,8 +353,27 @@ using (var scope = app.Services.CreateScope())
             Rol = "Yönetici",
             Gorev = "Sistem Yöneticisi",
             Birim = "Bilgi İşlem",
+            SistemYoneticisi = true,
         });
         await db.SaveChangesAsync();
+    }
+
+    // Sistemde hiç sistem yöneticisi kalmadıysa (yeni alanla açılan mevcut kurulumlar dahil)
+    // en eski aktif yönetici hesabı yetkilendirilir; aksi halde kimse hesap açamaz, şifre
+    // veremez ve Ayarlar'a giremezdi.
+    if (!await db.Kullanicilar.AnyAsync(k => k.SistemYoneticisi && k.Durum == "Aktif"))
+    {
+        var ilkYonetici = await db.Kullanicilar
+            .Where(k => k.Rol == "Yönetici" && k.Durum == "Aktif")
+            .OrderBy(k => k.KullaniciAdi == yoneticiKullaniciAdi ? 0 : 1)
+            .ThenBy(k => k.Id)
+            .FirstOrDefaultAsync();
+        if (ilkYonetici is not null)
+        {
+            ilkYonetici.SistemYoneticisi = true;
+            await db.SaveChangesAsync();
+            Console.WriteLine($"Sistem yöneticisi yetkisi '{ilkYonetici.KullaniciAdi}' hesabına verildi.");
+        }
     }
 
     // Yalnızca panele giriş yapabilen yönetici hesaplarına başlangıç şifresi atanır.

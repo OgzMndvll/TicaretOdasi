@@ -9,7 +9,7 @@ namespace EtsoApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Microsoft.AspNetCore.Authorization.Authorize(Roles = "Yönetici")]
+[Microsoft.AspNetCore.Authorization.Authorize(Policy = Services.TokenServisi.SistemYonetimiPolitikasi)]
 public class SistemController(EtsoDbContext db, IWebHostEnvironment ortam) : ControllerBase
 {
     /// <summary>Tüm tabloların tam JSON yedeğini indirir.</summary>

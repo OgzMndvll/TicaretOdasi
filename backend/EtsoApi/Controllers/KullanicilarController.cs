@@ -17,6 +17,21 @@ public class KullanicilarController(EtsoDbContext db, CanliBildirim canli) : Con
     private async Task<bool> BaskaAktifYoneticiVarMi(int haricId) =>
         await db.Kullanicilar.AnyAsync(k => k.Id != haricId && k.Rol == "Yönetici" && k.Durum == "Aktif");
 
+    /// <summary>Hesap açma/şifre belirleme yetkisi olan kullanıcı mı?</summary>
+    private bool SistemYetkisiVar => User.SistemYoneticisi();
+
+    /// <summary>Sistemde en az bir aktif sistem yöneticisi kalmalı; aksi halde bir daha
+    /// kimse hesap açamaz ve ayarlara giremez.</summary>
+    private async Task<bool> BaskaSistemYoneticisiVarMi(int haricId) =>
+        await db.Kullanicilar.AnyAsync(k => k.Id != haricId && k.SistemYoneticisi && k.Durum == "Aktif");
+
+    private static ObjectResult Yasak(string mesaj) =>
+        new(new { mesaj }) { StatusCode = StatusCodes.Status403Forbidden };
+
+    private const string YetkiMesaji =
+        "Panele giriş yapabilen hesap açmak, şifre belirlemek ve hesapları değiştirmek yalnızca "
+        + "sistem yöneticisine açıktır. Şifresiz görevli kaydını herkes ekleyebilir.";
+
     [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Yönetici")]
     [HttpGet]
     public async Task<IActionResult> Listele(
@@ -37,7 +52,8 @@ public class KullanicilarController(EtsoDbContext db, CanliBildirim canli) : Con
     /// </summary>
     private static IQueryable<object> Projeksiyon(IQueryable<Kullanici> sorgu) => sorgu.Select(k => new
     {
-        k.Id, k.AdSoyad, k.KullaniciAdi, k.Rol, k.Gorev, k.Birim, k.Eposta, k.Telefon, k.Durum, k.OlusturmaTarihi,
+        k.Id, k.AdSoyad, k.KullaniciAdi, k.Rol, k.Gorev, k.Birim, k.Eposta, k.Telefon, k.Durum,
+        k.SistemYoneticisi, k.OlusturmaTarihi,
         Gruplar = k.Gruplar
             // Gruplar ekranda numarasıyla anıldığı için sıralama da numaraya göre;
             // numarasız gruplar sona alfabetik gelir.
@@ -78,6 +94,13 @@ public class KullanicilarController(EtsoDbContext db, CanliBildirim canli) : Con
 
         // Rol ve durum yalnızca bilinen değerlerden olabilir; serbest metin kabul edilmez.
         var rol = string.IsNullOrWhiteSpace(dto.Rol) ? Kullanici.CalisanRolu : dto.Rol;
+
+        // Şifresiz görevli kaydını her yönetici ekleyebilir (görüşme listelerinde seçilmek için).
+        // Panele giriş yapabilen hesap açmak, şifre belirlemek ve yetki vermek sistem yöneticisine
+        // özeldir; aksi halde herkes kendine yeni bir giriş hesabı açabilirdi.
+        if (!SistemYetkisiVar
+            && (rol == Kullanici.YoneticiRolu || !string.IsNullOrWhiteSpace(dto.Sifre) || dto.SistemYoneticisi == true))
+            return Yasak(YetkiMesaji);
         if (!GecerliRoller.Contains(rol))
             return BadRequest(new { mesaj = "Geçersiz rol. 'Yönetici' veya 'Görevli' olmalıdır." });
         var durum = string.IsNullOrWhiteSpace(dto.Durum) ? "Aktif" : dto.Durum;
@@ -104,6 +127,7 @@ public class KullanicilarController(EtsoDbContext db, CanliBildirim canli) : Con
             Eposta = dto.Eposta,
             Telefon = dto.Telefon,
             Durum = durum,
+            SistemYoneticisi = dto.SistemYoneticisi == true,
         };
         // Şifresiz çalışan kaydında da hash rastgele üretilir: alan boş kalırsa açılışta
         // "şifresiz kullanıcı" olarak görülüp yeniden şifre atanmaya çalışılırdı.
@@ -127,8 +151,8 @@ public class KullanicilarController(EtsoDbContext db, CanliBildirim canli) : Con
         return CreatedAtAction(nameof(Getir), new { id = kullanici.Id }, new { kullanici.Id, kullanici.KullaniciAdi });
     }
 
-    /// <summary>Yöneticinin bir kullanıcının şifresini sıfırlaması. Kilidi de açar.</summary>
-    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Yönetici")]
+    /// <summary>Bir kullanıcının şifresini sıfırlar; kilidi de açar. Yalnızca sistem yöneticisi.</summary>
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = TokenServisi.SistemYonetimiPolitikasi)]
     [HttpPut("{id:int}/sifre")]
     public async Task<IActionResult> SifreSifirla(int id, SifreSifirlaDto dto)
     {
@@ -159,6 +183,21 @@ public class KullanicilarController(EtsoDbContext db, CanliBildirim canli) : Con
         if (!string.IsNullOrWhiteSpace(dto.Durum) && !GecerliDurumlar.Contains(dto.Durum))
             return BadRequest(new { mesaj = "Geçersiz durum. 'Aktif' veya 'Pasif' olmalıdır." });
 
+        // Giriş yapabilen hesaplara yalnızca sistem yöneticisi dokunabilir: kendi hesabını ya da
+        // başkasınınkini yönetici yapmak, yetki vermek/almak bu kilidin arkasındadır. Şifresiz
+        // görevli kayıtları (ad, görev, birim, grup) her yönetici tarafından düzenlenebilir.
+        var yetkiDegisiyor = dto.SistemYoneticisi is not null && dto.SistemYoneticisi != kullanici.SistemYoneticisi;
+        if (!SistemYetkisiVar
+            && (kullanici.Rol == Kullanici.YoneticiRolu || dto.Rol == Kullanici.YoneticiRolu || yetkiDegisiyor))
+            return Yasak(YetkiMesaji);
+
+        // Son aktif sistem yöneticisinin yetkisi alınamaz/pasife alınamaz; aksi halde bir daha
+        // kimse hesap açamaz, şifre veremez ve ayarlara giremez.
+        var sistemYetkisiBitiyor = kullanici.SistemYoneticisi && kullanici.Durum == "Aktif"
+            && ((dto.SistemYoneticisi == false) || (!string.IsNullOrWhiteSpace(dto.Durum) && dto.Durum != "Aktif"));
+        if (sistemYetkisiBitiyor && !await BaskaSistemYoneticisiVarMi(id))
+            return Conflict(new { mesaj = "Sistemdeki son sistem yöneticisi bu kullanıcı; yetkisini veya durumunu değiştiremezsiniz. Önce başka bir sistem yöneticisi tanımlayın." });
+
         // Son aktif yöneticinin yetkisi alınamaz/pasife alınamaz; aksi halde sisteme kimse giremez.
         var yoneticilikBitiyor = kullanici.Rol == "Yönetici" && kullanici.Durum == "Aktif"
             && ((!string.IsNullOrWhiteSpace(dto.Rol) && dto.Rol != "Yönetici")
@@ -182,6 +221,9 @@ public class KullanicilarController(EtsoDbContext db, CanliBildirim canli) : Con
         kullanici.Eposta = dto.Eposta;
         kullanici.Telefon = dto.Telefon;
         if (!string.IsNullOrWhiteSpace(dto.Durum)) kullanici.Durum = dto.Durum;
+        // Alan gönderilmezse (null) mevcut yetkiye dokunulmaz; yetki alanını taşımayan
+        // eski istemciler kullanıcının sistem yöneticiliğini sessizce düşürmesin.
+        if (dto.SistemYoneticisi is not null) kullanici.SistemYoneticisi = dto.SistemYoneticisi.Value;
 
         var grupHatasi = await GruplariDogrula(dto.GrupIdler);
         if (grupHatasi is not null) return BadRequest(new { mesaj = grupHatasi });
@@ -231,8 +273,12 @@ public class KullanicilarController(EtsoDbContext db, CanliBildirim canli) : Con
     {
         var kullanici = await db.Kullanicilar.FindAsync(id);
         if (kullanici is null) return NotFound();
+        if (!SistemYetkisiVar && kullanici.Rol == Kullanici.YoneticiRolu)
+            return Yasak(YetkiMesaji);
         if (id == User.KullaniciId())
             return Conflict(new { mesaj = "Kendi hesabınızı silemezsiniz." });
+        if (kullanici.SistemYoneticisi && !await BaskaSistemYoneticisiVarMi(id))
+            return Conflict(new { mesaj = "Sistemdeki son sistem yöneticisi silinemez. Önce başka bir sistem yöneticisi tanımlayın." });
         if (kullanici.Rol == "Yönetici" && !await BaskaAktifYoneticiVarMi(id))
             return Conflict(new { mesaj = "Sistemdeki son aktif yönetici silinemez. Önce başka bir yönetici tanımlayın." });
         if (await db.Gorusmeler.AnyAsync(g => g.GorevliId == id) || await db.Gorevlendirmeler.AnyAsync(g => g.GorevliId == id))
@@ -375,6 +421,14 @@ public class KullanicilarController(EtsoDbContext db, CanliBildirim canli) : Con
             if (rol is not null && !GecerliRoller.Contains(rol))
             {
                 hatalar.Add($"Satır {satirNo}: '{rol}' geçersiz rol, 'Görevli' olarak kaydedildi.");
+                rol = Kullanici.CalisanRolu;
+            }
+            // Dosyayla panele giriş yapabilen hesap açılamaz: içe aktarma herkese açıktır ve
+            // şifre taşımaz. Yönetici hesabı yalnızca Kullanıcılar ekranından, sistem
+            // yöneticisi tarafından açılır.
+            if (rol == Kullanici.YoneticiRolu && !SistemYetkisiVar)
+            {
+                hatalar.Add($"Satır {satirNo}: Dosyayla yönetici hesabı açılamaz, 'Görevli' olarak kaydedildi.");
                 rol = Kullanici.CalisanRolu;
             }
             var durum = Al(degerler, "Durum");

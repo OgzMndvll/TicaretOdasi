@@ -14,6 +14,7 @@ public class EtsoDbContext(DbContextOptions<EtsoDbContext> options) : DbContext(
     public DbSet<Gorevlendirme> Gorevlendirmeler => Set<Gorevlendirme>();
     public DbSet<Onay> Onaylar => Set<Onay>();
     public DbSet<Ayar> Ayarlar => Set<Ayar>();
+    public DbSet<IslemKaydi> IslemKayitlari => Set<IslemKaydi>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -112,6 +113,20 @@ public class EtsoDbContext(DbContextOptions<EtsoDbContext> options) : DbContext(
             e.HasOne(x => x.Gorevli).WithMany().HasForeignKey(x => x.GorevliId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Esnaf).WithMany().HasForeignKey(x => x.EsnafId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Grup).WithMany().HasForeignKey(x => x.GrupId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<IslemKaydi>(e =>
+        {
+            e.Property(x => x.KullaniciAdi).HasMaxLength(60);
+            e.Property(x => x.KullaniciAdSoyad).HasMaxLength(120);
+            e.Property(x => x.EsnafUnvan).HasMaxLength(250);
+            e.Property(x => x.Islem).HasMaxLength(60);
+            e.Property(x => x.Detay).HasMaxLength(500);
+            // Log en çok tarihe ve üyeye göre süzülür.
+            e.HasIndex(x => x.Tarih);
+            e.HasIndex(x => x.EsnafId);
+            // Kayıt ilişkisel bağ kurmaz: üye ya da kullanıcı silinse de geçmiş okunur kalmalı
+            // (silme işleminin kendisi de burada tutuluyor). Kimlikler yalnızca süzme içindir.
         });
 
         modelBuilder.Entity<Ayar>(e =>

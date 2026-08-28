@@ -22,6 +22,9 @@ public record GrupYazDto(string Ad, string? Aciklama, string? Tur, int? UstGrupI
 public record KullaniciYazDto(
     string AdSoyad, string KullaniciAdi, string Rol, string? Gorev,
     string? Birim, string? Eposta, string? Telefon, string? Durum, string? Sifre = null,
+    /// <summary>Kullanıcı/şifre yönetimi ve ayarlar yetkisi. Yalnızca sistem yöneticisi
+    /// değiştirebilir; gönderilmezse (null) mevcut yetkiye dokunulmaz.</summary>
+    bool? SistemYoneticisi = null,
     /// <summary>Çalışanın sorumlu olduğu meslek grupları. Gönderilen liste kaydın tam
     /// karşılığıdır: listede olmayan bağlar silinir. Alan hiç gönderilmezse (null) mevcut
     /// bağlara dokunulmaz — böylece grup alanını taşımayan eski istemciler bağları silmez.</summary>

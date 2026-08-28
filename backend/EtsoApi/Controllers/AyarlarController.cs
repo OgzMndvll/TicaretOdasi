@@ -7,7 +7,7 @@ namespace EtsoApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Microsoft.AspNetCore.Authorization.Authorize(Roles = "Yönetici")]
+[Microsoft.AspNetCore.Authorization.Authorize(Policy = EtsoApi.Services.TokenServisi.SistemYonetimiPolitikasi)]
 public class AyarlarController(EtsoDbContext db) : ControllerBase
 {
     // Kurum bilgileri ve güvenlik ayarları yalnızca Yönetici'ye açıktır (Görevli okuyamaz).
@@ -18,7 +18,7 @@ public class AyarlarController(EtsoDbContext db) : ControllerBase
         return Ok(ayarlar);
     }
 
-    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Yönetici")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = EtsoApi.Services.TokenServisi.SistemYonetimiPolitikasi)]
     [HttpPut]
     public async Task<IActionResult> Kaydet([FromBody] Dictionary<string, string> gelen)
     {

@@ -8,7 +8,7 @@ namespace EtsoApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : ControllerBase
+public class EsnaflarController(EtsoDbContext db, CanliBildirim canli, IslemGunlugu gunluk) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> Listele(
@@ -232,6 +232,10 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
         };
         OdaBilgileriniYaz(esnaf, dto);
         db.Esnaflar.Add(esnaf);
+        // Log satırı üyeyle aynı kaydetmede yazılır; üyenin kimliği bu noktada henüz yok,
+        // EF ilişkisiz alanı kaydetme sırasında dolduramaz — bu yüzden ikinci kaydetme gerekir.
+        await db.SaveChangesAsync();
+        gunluk.Yaz(Islemler.UyeEklendi, esnaf, esnaf.UyeSicilNo is null ? null : $"Sicil no: {esnaf.UyeSicilNo}");
         await db.SaveChangesAsync();
         // Kayıt değişti: bağlı paneller listeyi kendiliğinden tazeler (bkz. Services/CanliBildirim.cs).
         await canli.DegistiAsync("esnaf", esnaf.Id);
@@ -261,6 +265,7 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
         esnaf.GorevliId = dto.GorevliId;
         if (!string.IsNullOrWhiteSpace(dto.Durum)) esnaf.Durum = dto.Durum;
         OdaBilgileriniYaz(esnaf, dto);
+        gunluk.Yaz(Islemler.UyeDuzenlendi, esnaf, "Üye bilgileri güncellendi");
         await db.SaveChangesAsync();
         await canli.DegistiAsync("esnaf", esnaf.Id);
         return NoContent();
@@ -281,8 +286,10 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
         if (esnaf is null) return NotFound();
 
         var degisti = false;
+        var notlar = new List<string>();
         if (esnaf.UyelikDurumu != dto.UyelikDurumu)
         {
+            notlar.Add($"Üyelik: {esnaf.UyelikDurumu} → {dto.UyelikDurumu}");
             esnaf.UyelikDurumu = dto.UyelikDurumu;
             // Durumun ne zaman değiştiği raporlarda aranıyor; elle girilmez, değişiklikle birlikte damgalanır.
             esnaf.DurumDegisimTarihi = DateTime.UtcNow;
@@ -291,6 +298,7 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
         // Alan gönderilmediyse (null) mevcut ödeme bilgisi korunur.
         if (dto.Odendi is not null && esnaf.Odendi != dto.Odendi.Value)
         {
+            notlar.Add($"Ödeme: {(dto.Odendi.Value ? "Ödendi" : "Ödenmedi")}");
             esnaf.Odendi = dto.Odendi.Value;
             // İşaret kaldırıldığında tarih de silinir; aksi halde "ödenmedi ama ödeme tarihi var" kalırdı.
             esnaf.OdemeTarihi = dto.Odendi.Value ? DateTime.UtcNow : null;
@@ -298,6 +306,7 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
         }
         if (!degisti) return NoContent();
 
+        gunluk.Yaz(Islemler.UyelikDurumuDegisti, esnaf, string.Join(" · ", notlar));
         await db.SaveChangesAsync();
         await canli.DegistiAsync("esnaf", esnaf.Id);
         return NoContent();
@@ -309,6 +318,8 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
     {
         var esnaf = await db.Esnaflar.FindAsync(id);
         if (esnaf is null) return NotFound();
+        // Log satırı üyeye bağ kurmaz, unvanı kopyalar: silinen üyenin geçmişi okunur kalır.
+        gunluk.Yaz(Islemler.UyeSilindi, esnaf, esnaf.UyeSicilNo is null ? null : $"Sicil no: {esnaf.UyeSicilNo}");
         db.Esnaflar.Remove(esnaf);
         await db.SaveChangesAsync();
         await canli.DegistiAsync("esnaf", id);

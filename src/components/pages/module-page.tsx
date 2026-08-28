@@ -16,7 +16,7 @@ import {
   api, ApiError, API_ERISIM_HATASI, durumTonu, grupEtiketi, ODENDI, ODENMEDI, sayiGoster, tarihGoster, yuzde,
   EsnafKaydi, EsnafYetkilisi, GorusmeKaydi, GrupKaydi, KullaniciKaydi, OnayKaydi, Sayfali,
 } from "@/lib/api";
-import { kimlik, yoneticiMi } from "@/lib/auth";
+import { kimlik, sistemYoneticisiMi, yoneticiMi } from "@/lib/auth";
 import { CanliOlay, useCanliVeri } from "@/lib/canli";
 
 /** Üyenin görüşme sonucundan gelen onay durumu: görüşme sonuçları + hiç görüşülmemişler. */
@@ -501,6 +501,7 @@ export function ModulePage({ kind }: { kind: PageKind }) {
     : null;
 
   const yonetici = yoneticiMi();
+  const sistemYoneticisi = sistemYoneticisiMi();
   const etkinFiltreler = { ...page.tabs[tab].filtre, ...filtreler };
   const filtreAktif = !!arama.trim() || Object.values(etkinFiltreler).some(Boolean);
   const seciliGrupSayisi = (etkinFiltreler.grupId ?? "").split(",").filter(Boolean).length;
@@ -606,7 +607,8 @@ export function ModulePage({ kind }: { kind: PageKind }) {
         {kind === "calisanlar"
           ? <div className="quick-list">
               {yonetici && <button onClick={() => setAction(page.action)}>+ Yeni Çalışan Ekle</button>}
-              {yonetici && <button onClick={() => setRolYonetimiAcik(true)}>Rol Yönetimi</button>}
+              {/* Rol değiştirmek bir kaydı giriş yapabilen hesaba çevirebilir; sistem yöneticisine özel. */}
+              {sistemYoneticisi && <button onClick={() => setRolYonetimiAcik(true)}>Rol Yönetimi</button>}
               {yonetici && <button onClick={() => setIceAktarAcik(true)}>Excel&apos;den İçe Aktar</button>}
               <button onClick={() => api.indir("/api/kullanicilar/disa-aktar").catch(() => setToast("Rapor indirilemedi."))}>Çalışan Raporu (Excel)</button>
               {!yonetici && <p style={{ color: "#7a8699", fontSize: 12.5, margin: 0 }}>Çalışan ekleme ve rol yönetimi yalnızca Yönetici rolüne açıktır.</p>}

@@ -5,9 +5,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
-import { girisliMi, kimlik } from "@/lib/auth";
+import { girisliMi, kimlik, sistemYoneticisiMi } from "@/lib/auth";
 
-export function AppShell({ title, children }: { title: string; children: React.ReactNode }) {
+export function AppShell({ title, children, sistemYonetimi = false }: {
+  title: string; children: React.ReactNode;
+  /** true: sayfa yalnızca sistem yöneticisine açıktır; başkası adres çubuğundan
+   *  girerse Dashboard'a döner. Asıl kilit sunucudadır, bu yalnızca yönlendirmedir. */
+  sistemYonetimi?: boolean;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -18,8 +23,12 @@ export function AppShell({ title, children }: { title: string; children: React.R
       router.replace("/giris");
       return;
     }
+    if (sistemYonetimi && !sistemYoneticisiMi()) {
+      router.replace("/");
+      return;
+    }
     setHazir(true);
-  }, [router, pathname]);
+  }, [router, pathname, sistemYonetimi]);
 
   if (!hazir) return null;
 

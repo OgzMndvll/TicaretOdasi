@@ -2,7 +2,11 @@ import { yol } from "./yol";
 
 const TOKEN_ANAHTARI = "etso_token";
 
-export interface Kimlik { id: number; adSoyad: string; kullaniciAdi: string; rol: string; bitis: number }
+export interface Kimlik {
+  id: number; adSoyad: string; kullaniciAdi: string; rol: string; bitis: number;
+  /** Kullanıcı/şifre yönetimi, Ayarlar ve İşlem Kayıtları yetkisi. */
+  sistemYoneticisi: boolean;
+}
 
 export function tokenAl(): string | null {
   if (typeof window === "undefined") return null;
@@ -42,6 +46,7 @@ export function kimlik(): Kimlik | null {
       adSoyad: govde.adSoyad ?? "",
       kullaniciAdi: govde.unique_name ?? "",
       rol: govde.rol ?? "",
+      sistemYoneticisi: govde.sistemYoneticisi === "true" || govde.sistemYoneticisi === true,
       bitis: govde.exp,
     };
   } catch {
@@ -55,4 +60,13 @@ export function girisliMi(): boolean {
 
 export function yoneticiMi(): boolean {
   return kimlik()?.rol === "Yönetici";
+}
+
+/**
+ * Hesap açma, şifre belirleme, Ayarlar ve İşlem Kayıtları yetkisi. Panele giren herkes
+ * "Yönetici"dir ve aynı ekranları görür; bu bayrak yalnızca o üç ekranı açar.
+ * Yalnızca görünürlük içindir — asıl kilit sunucudaki "SistemYonetimi" politikasıdır.
+ */
+export function sistemYoneticisiMi(): boolean {
+  return kimlik()?.sistemYoneticisi === true;
 }

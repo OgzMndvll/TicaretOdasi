@@ -87,7 +87,7 @@ export function SettingsPage() {
       </select>
     </label>;
 
-  return <AppShell title="Ayarlar">
+  return <AppShell title="Ayarlar" sistemYonetimi>
     <div className="settings-layout">
       <aside className="panel settings-menu"><h2>Ayarlar</h2>
         {BOLUMLER.filter(b => yonetici || !b.yalnizYonetici).map(b =>

@@ -8,7 +8,7 @@ namespace EtsoApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class GorusmelerController(EtsoDbContext db, CanliBildirim canli) : ControllerBase
+public class GorusmelerController(EtsoDbContext db, CanliBildirim canli, IslemGunlugu gunluk) : ControllerBase
 {
     /// <summary>
     /// Görüşme sonucu seçenekleri. "Takip Edilecek" ve "Gelmeyecek", ayrı bir takip alanı
@@ -167,6 +167,7 @@ public class GorusmelerController(EtsoDbContext db, CanliBildirim canli) : Contr
             TakipGerekli = sonuc == TakipSonucu,
         };
         db.Gorusmeler.Add(gorusme);
+        gunluk.Yaz(Islemler.GorusmeEklendi, esnaf, $"{sira}. görüşme, {sonuc}");
 
         // Esnafın son görüşme bilgisi ve onay durumu, en güncel görüşmeyle senkron tutulur.
         if (esnaf.SonGorusmeTarihi is null || gorusme.Tarih >= esnaf.SonGorusmeTarihi)
@@ -186,6 +187,7 @@ public class GorusmelerController(EtsoDbContext db, CanliBildirim canli) : Contr
     {
         var gorusme = await db.Gorusmeler.FindAsync(id);
         if (gorusme is null) return NotFound();
+        var eskiSonuc = gorusme.Sonuc;
 
         if (!await db.Kullanicilar.AnyAsync(k => k.Id == dto.GorevliId))
             return BadRequest(new { mesaj = "Görevli bulunamadı." });
@@ -214,6 +216,11 @@ public class GorusmelerController(EtsoDbContext db, CanliBildirim canli) : Contr
         if (dto.Tarih is not (null or { Ticks: 0 })) gorusme.Tarih = dto.Tarih.Value;
         gorusme.Not = dto.Not;
         gorusme.TakipGerekli = gorusme.Sonuc == TakipSonucu;
+
+        gunluk.Yaz(Islemler.GorusmeDuzenlendi, await db.Esnaflar.FindAsync(gorusme.EsnafId),
+            eskiSonuc == gorusme.Sonuc
+                ? $"{gorusme.Sira}. görüşme, {gorusme.Sonuc}"
+                : $"{gorusme.Sira}. görüşme, {eskiSonuc} → {gorusme.Sonuc}");
         await db.SaveChangesAsync();
         await EsnafDurumunuEsitle(gorusme.EsnafId);
         await canli.DegistiAsync("gorusme", gorusme.Id);
@@ -227,6 +234,8 @@ public class GorusmelerController(EtsoDbContext db, CanliBildirim canli) : Contr
         var gorusme = await db.Gorusmeler.FindAsync(id);
         if (gorusme is null) return NotFound();
         var esnafId = gorusme.EsnafId;
+        gunluk.Yaz(Islemler.GorusmeSilindi, await db.Esnaflar.FindAsync(esnafId),
+            $"{gorusme.Sira}. görüşme, {gorusme.Sonuc}");
         db.Gorusmeler.Remove(gorusme);
         await db.SaveChangesAsync();
         await EsnafDurumunuEsitle(esnafId);
