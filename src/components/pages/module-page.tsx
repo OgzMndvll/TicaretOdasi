@@ -904,10 +904,10 @@ function ModuleTable({ kind, kayitlar, yukleniyor, onKarar, onGoster, onDuzenle,
   }
   const liste = kayitlar as EsnafKaydi[];
   return <div className="table-scroll"><table>
-    <thead><tr><th>Sicil No</th><th>Unvan / Yetkili</th><th>Meslek Grubu</th><th>Üyelik Durumu</th><th>Ödeme</th><th>Telefon</th><th>İlçe</th><th>Görevli</th><th>Son Görüşme</th><th>Onay Durumu</th></tr></thead>
+    <thead><tr><th>Sicil No</th><th>Unvan / Yetkili</th><th>Meslek Grubu</th><th>Üyelik Durumu</th><th>Ödeme</th><th>İlçe</th><th>Görevli</th><th>Son Görüşme</th><th>Onay Durumu</th></tr></thead>
     {/* Satıra tıklayınca üyenin görüşme ekranı açılır; satır rengi üyelik/onay durumunu gösterir.
         "İşlemler" sütunu kaldırıldı: üyeyle ilgili tüm işlemler üye kartından yürütülür. */}
-    <tbody>{!liste.length ? <Bos yukleniyor={yukleniyor} sutun={10} /> : liste.map(e => <tr key={e.id}
+    <tbody>{!liste.length ? <Bos yukleniyor={yukleniyor} sutun={9} /> : liste.map(e => <tr key={e.id}
       className={`tiklanabilir ${satirTonu(e.durum, e.uyelikDurumu)}`} onClick={() => onGoster(e)}
       title="Görüşmeleri aç">
       <td>{e.uyeSicilNo ?? "-"}</td>
@@ -924,7 +924,7 @@ function ModuleTable({ kind, kayitlar, yukleniyor, onKarar, onGoster, onDuzenle,
         ? <><span className={`badge ${durumTonu(ODENDI)}`}>{ODENDI}</span>
             {e.odemeTarihi && <small>{tarihGoster(e.odemeTarihi)}</small>}</>
         : "-"}</td>
-      <td>{e.telefon ?? e.isTelefonu ?? "-"}</td><td>{e.ilce ?? "-"}</td>
+      <td>{e.ilce ?? "-"}</td>
       <td>{e.gorevli ?? "-"}</td><td>{tarihGoster(e.sonGorusmeTarihi)}</td>
       <td><span className={`badge ${durumTonu(e.durum)}`}>{e.durum}</span></td>
     </tr>)}</tbody>
