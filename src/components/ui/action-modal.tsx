@@ -5,7 +5,7 @@ import { CheckCircle2 } from "lucide-react";
 import { CokluSecim } from "./coklu-secim";
 import { EsnafSecici } from "./esnaf-secici";
 import { FormField, Modal } from "./modal";
-import { api, ApiError, grupEtiketi, GrupKaydi, KullaniciKaydi } from "@/lib/api";
+import { api, ApiError, grupEtiketi, ODEME_SECENEKLERI, ODENDI, GrupKaydi, KullaniciKaydi } from "@/lib/api";
 import { ILLER, ilceleriGetir } from "@/lib/il-ilce";
 
 type Alan = {
@@ -171,9 +171,15 @@ export const duzenlemeFormlari: Record<string, DuzenlemeTanimi> = {
   esnafDurum: {
     alanlar: [
       { name: "uyelikDurumu", label: "Üyelik Durumu", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: UYELIK_DURUMLARI, zorunlu: true },
+      // Askıdaki üye borcunu ödeyince aynı ekrandan hem "Faal"a alınır hem ödeme işaretlenir.
+      { name: "odendi", label: "Ödeme Durumu", tip: "select", secenekKaynagi: "sabit", sabitSecenekler: ODEME_SECENEKLERI, zorunlu: true },
     ],
     buton: "Üyelik Durumunu Kaydet",
-    gonder: (id, v) => api.put(`/api/esnaflar/${id}/uyelik-durumu`, { uyelikDurumu: v.uyelikDurumu }),
+    gonder: (id, v) => api.put(`/api/esnaflar/${id}/uyelik-durumu`, {
+      uyelikDurumu: v.uyelikDurumu,
+      // Sunucu bool bekler; ödeme tarihini kendisi damgalar.
+      odendi: v.odendi === ODENDI,
+    }),
   },
   grup: {
     alanlar: [

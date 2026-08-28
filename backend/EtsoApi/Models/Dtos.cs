@@ -11,8 +11,11 @@ public record EsnafYazDto(
     string? FaaliyetDetayi = null, string? NaceKodu = null, string? NaceAdi = null,
     string? Gorevi = null, string? IsTelefonu = null, DateTime? KayitTarihi = null);
 
-/// <summary>Üye kartındaki "Düzenle" düğmesi: yalnızca üyelik durumu (Faal / Askı / Pasif).</summary>
-public record EsnafUyelikDurumuDto(string UyelikDurumu);
+/// <summary>
+/// Üye kartındaki "Düzenle" düğmesi: üyelik durumu (Faal / Askı / Pasif) ve ödeme bilgisi.
+/// <paramref name="Odendi"/> gönderilmezse (null) mevcut ödeme bilgisine dokunulmaz.
+/// </summary>
+public record EsnafUyelikDurumuDto(string UyelikDurumu, bool? Odendi = null);
 
 public record GrupYazDto(string Ad, string? Aciklama, string? Tur, int? UstGrupId, string? Durum, int? No = null);
 

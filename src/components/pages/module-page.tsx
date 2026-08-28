@@ -13,7 +13,7 @@ import { Modal } from "@/components/ui/modal";
 import { StatCard } from "@/components/ui/stat-card";
 import { Toast } from "@/components/ui/toast";
 import {
-  api, ApiError, API_ERISIM_HATASI, durumTonu, grupEtiketi, sayiGoster, tarihGoster, yuzde,
+  api, ApiError, API_ERISIM_HATASI, durumTonu, grupEtiketi, ODENDI, ODENMEDI, sayiGoster, tarihGoster, yuzde,
   EsnafKaydi, EsnafYetkilisi, GorusmeKaydi, GrupKaydi, KullaniciKaydi, OnayKaydi, Sayfali,
 } from "@/lib/api";
 import { kimlik, yoneticiMi } from "@/lib/auth";
@@ -251,6 +251,9 @@ export function ModulePage({ kind }: { kind: PageKind }) {
         // Üyeye atanan kişi değil, üyeyle fiilen görüşme yapmış çalışan.
         yap("Görüşen Çalışan", "gorusenId", gorevliSecenek, true),
         yap("Üyelik Durumu", "uyelikDurumu", ["Faal", "Askı", "Pasif"].map(d => ({ deger: d, etiket: d })), true),
+        yap("Ödeme Durumu", "odendi", [
+          { deger: "true", etiket: ODENDI }, { deger: "false", etiket: ODENMEDI },
+        ]),
         yap("Görüşme Durumu", "gorusuldu", [
           { deger: "true", etiket: "Görüşülmüş" }, { deger: "false", etiket: "Hiç görüşülmemiş" },
         ]),
@@ -344,7 +347,10 @@ export function ModulePage({ kind }: { kind: PageKind }) {
     setDetay(null);
     setDuzenleme({
       form: "esnafDurum", id: e.id, baslik: `Üyelik Durumu — ${e.isletme}`,
-      degerler: { uyelikDurumu: e.uyelikDurumu ?? "Faal" },
+      degerler: {
+        uyelikDurumu: e.uyelikDurumu ?? "Faal",
+        odendi: e.odendi ? ODENDI : ODENMEDI,
+      },
     });
   }
 
@@ -372,6 +378,13 @@ export function ModulePage({ kind }: { kind: PageKind }) {
             { etiket: "Şirket Unvanı", deger: tam.isletme },
             { etiket: "Yetkili Kişi", deger: tam.adSoyad },
             { etiket: "Telefon", deger: tam.telefon ?? tam.isTelefonu, tur: "telefon" },
+            { etiket: "Üyelik Durumu", deger: tam.uyelikDurumu ?? "-", rozet: true },
+            // Ödeme satırı yalnızca işaretliyse çizilir (listedeki kuralla aynı); ödeme
+            // durumu her hâlükârda "Düzenle" ekranından görülüp değiştirilebilir.
+            ...(tam.odendi ? [{
+              etiket: "Ödeme Durumu", rozet: true,
+              deger: tam.odemeTarihi ? `${ODENDI} — ${tarihGoster(tam.odemeTarihi)}` : ODENDI,
+            }] : []),
           ],
           gorusmeler: tam.gorusmeler,
           esnaf: { id: tam.id, etiket: `${tam.adSoyad} — ${tam.isletme}` },
@@ -889,10 +902,10 @@ function ModuleTable({ kind, kayitlar, yukleniyor, onKarar, onGoster, onDuzenle,
   }
   const liste = kayitlar as EsnafKaydi[];
   return <div className="table-scroll"><table>
-    <thead><tr><th>Sicil No</th><th>Unvan / Yetkili</th><th>Meslek Grubu</th><th>Üyelik Durumu</th><th>Telefon</th><th>İlçe</th><th>Görevli</th><th>Son Görüşme</th><th>Onay Durumu</th></tr></thead>
+    <thead><tr><th>Sicil No</th><th>Unvan / Yetkili</th><th>Meslek Grubu</th><th>Üyelik Durumu</th><th>Ödeme</th><th>Telefon</th><th>İlçe</th><th>Görevli</th><th>Son Görüşme</th><th>Onay Durumu</th></tr></thead>
     {/* Satıra tıklayınca üyenin görüşme ekranı açılır; satır rengi üyelik/onay durumunu gösterir.
         "İşlemler" sütunu kaldırıldı: üyeyle ilgili tüm işlemler üye kartından yürütülür. */}
-    <tbody>{!liste.length ? <Bos yukleniyor={yukleniyor} sutun={9} /> : liste.map(e => <tr key={e.id}
+    <tbody>{!liste.length ? <Bos yukleniyor={yukleniyor} sutun={10} /> : liste.map(e => <tr key={e.id}
       className={`tiklanabilir ${satirTonu(e.durum, e.uyelikDurumu)}`} onClick={() => onGoster(e)}
       title="Görüşmeleri aç">
       <td>{e.uyeSicilNo ?? "-"}</td>
@@ -902,6 +915,13 @@ function ModuleTable({ kind, kayitlar, yukleniyor, onKarar, onGoster, onDuzenle,
       <td>{grupEtiketi(e.grupNo, e.grup)}</td>
       <td><span className={`badge ${durumTonu(e.uyelikDurumu ?? "")}`}>{e.uyelikDurumu ?? "-"}</span>
         {e.uyelikDurumu === "Askı" && e.durumDegisimNedeni && <small>{e.durumDegisimNedeni}</small>}</td>
+      {/* Ödeme yalnızca işaretlenmiş üyelerde yazılır: hiç askıya düşmemiş faal üyelerde bu
+          kolon boş kalır, aksi halde binlerce satırda anlamsız "Ödenmedi" görünürdü.
+          Ödemesi olmayan askıdaki üyeler süzgeçten ("Ödeme Durumu → Ödenmedi") bulunur. */}
+      <td>{e.odendi
+        ? <><span className={`badge ${durumTonu(ODENDI)}`}>{ODENDI}</span>
+            {e.odemeTarihi && <small>{tarihGoster(e.odemeTarihi)}</small>}</>
+        : "-"}</td>
       <td>{e.telefon ?? e.isTelefonu ?? "-"}</td><td>{e.ilce ?? "-"}</td>
       <td>{e.gorevli ?? "-"}</td><td>{tarihGoster(e.sonGorusmeTarihi)}</td>
       <td><span className={`badge ${durumTonu(e.durum)}`}>{e.durum}</span></td>

@@ -111,6 +111,8 @@ export interface EsnafKaydi {
   vergiDairesi?: string | null; vergiTerkTarihi?: string | null;
   kurulusTarihi?: string | null; odaKararTarihi?: string | null; gorevi?: string | null;
   uyelikDurumu?: string | null; durumDegisimTarihi?: string | null; durumDegisimNedeni?: string | null;
+  /** Üyenin borcunu ödeyip ödemediği. Üye kartındaki "Düzenle" ekranından işaretlenir. */
+  odendi?: boolean; odemeTarihi?: string | null;
   faaliyetDetayi?: string | null; naceKodu?: string | null; naceAdi?: string | null;
   yetkililer?: EsnafYetkilisi[];
   /** Liste ucundan gelir: üyenin oda kaydındaki yetkili sayısı (detayda tam liste bulunur). */
@@ -213,12 +215,12 @@ export type StatusTone = "success" | "danger" | "warning" | "neutral" | "info" |
 
 export function durumTonu(durum: string): StatusTone {
   switch (durum) {
-    case "Onay Verdi": case "Onaylandı": case "Aktif": case "Tamamlandı": case "Faal": return "success";
+    case "Onay Verdi": case "Onaylandı": case "Aktif": case "Tamamlandı": case "Faal": case ODENDI: return "success";
     case "Onay Vermedi": case "Reddedildi": case "İptal Edildi": return "danger";
     case "Gelmeyecek": return "brown";
     case "Kararsız": case "Bekliyor": case "Bekleyen": case "Askı": return "warning";
     case "Takip Edilecek": return "info";
-    case "Görüşülmedi": case "Pasif": return "neutral";
+    case "Görüşülmedi": case "Pasif": case ODENMEDI: return "neutral";
     default: return "info";
   }
 }
@@ -228,6 +230,11 @@ export function durumTonu(durum: string): StatusTone {
  * uzun sektör adları listelerde ve süzgeçlerde yazılmaz; kaydın tam adı Gruplar
  * ekranındaki düzenleme formunda durur. Numarasız gruplar adıyla gösterilir.
  */
+/** Ödeme bilgisinin ekranda görünen iki değeri. Form seçenekleri de bu metinleri kullanır. */
+export const ODENDI = "Ödendi";
+export const ODENMEDI = "Ödenmedi";
+export const ODEME_SECENEKLERI = [ODENMEDI, ODENDI];
+
 export function grupEtiketi(no?: number | null, ad?: string | null): string {
   if (no) return `${no}. Grup`;
   return ad?.trim() || "-";

@@ -271,6 +271,17 @@ public static class UyeIceAktarmaServisi
                 durum = "Görüşülmedi";
             }
 
+            // Ödeme bilgisi bizim kendi kolonumuz; oda raporunda bulunmaz. Boş hücre "bilinmiyor"
+            // demektir ve mevcut kaydı değiştirmez (dosyada boş sütun bilgi silmez kuralı).
+            var odemeHam = Al(degerler, "Ödeme Durumu", "Odeme Durumu", "Ödeme", "Odendi");
+            bool? odendi = odemeHam is null ? null
+                : ExcelServisi.Normalize(odemeHam) is "odendi" or "evet" or "var" or "true" or "1" ? true
+                : ExcelServisi.Normalize(odemeHam) is "odenmedi" or "hayir" or "yok" or "false" or "0" ? false
+                : null;
+            if (odemeHam is not null && odendi is null)
+                hatalar.Add($"Satır {satirNo}: '{odemeHam}' geçersiz ödeme durumu, alan değiştirilmedi. " +
+                            "Geçerli değerler: Ödendi / Ödenmedi.");
+
             var uyelikHam = Al(degerler, "Üyelik Durumu", "Durum Tanımı", "Uyelik Durumu", "Durumu");
             string? uyelikDurumu = null;
             if (uyelikHam is not null)
@@ -317,6 +328,15 @@ public static class UyeIceAktarmaServisi
                 d |= Zaman(TarihOku(Al(degerler, "Kuruluş Tarihi", "Kurulus Tarihi")), mevcut.KurulusTarihi, v => mevcut.KurulusTarihi = v);
                 d |= Zaman(TarihOku(Al(degerler, "Üye Oda Karar Tarihi", "Uye Oda Karar Tarihi")), mevcut.OdaKararTarihi, v => mevcut.OdaKararTarihi = v);
                 d |= Zaman(TarihOku(Al(degerler, "Durum Değişim Tarihi", "Durum Degisim Tarihi")), mevcut.DurumDegisimTarihi, v => mevcut.DurumDegisimTarihi = v);
+                if (odendi is not null && mevcut.Odendi != odendi.Value)
+                {
+                    mevcut.Odendi = odendi.Value;
+                    // Dosyada ödeme tarihi varsa o, yoksa aktarım anı damgalanır; işaret kalkarsa temizlenir.
+                    mevcut.OdemeTarihi = odendi.Value
+                        ? TarihOku(Al(degerler, "Ödeme Tarihi", "Odeme Tarihi")) ?? DateTime.UtcNow
+                        : null;
+                    d = true;
+                }
                 d |= Zaman(TarihOku(Al(degerler, "Üye Kayıt Tarihi", "Uye Kayit Tarihi", "Kayıt Tarihi")), mevcut.KayitTarihi, v => mevcut.KayitTarihi = v);
                 // Meslek grubu ve görevli yalnızca dosyada gerçekten çözülebildiyse yazılır.
                 // Grup nesnesi değil kimliği karşılaştırılır: gezinme özelliği yüklenmediği için
@@ -355,6 +375,10 @@ public static class UyeIceAktarmaServisi
                 UyelikDurumu = uyelikDurumu ?? "Faal",
                 DurumDegisimTarihi = TarihOku(Al(degerler, "Durum Değişim Tarihi", "Durum Degisim Tarihi")),
                 DurumDegisimNedeni = Kirp(Al(degerler, "Durum Değişim Nedeni", "Durum Degisim Nedeni"), 200),
+                Odendi = odendi ?? false,
+                OdemeTarihi = odendi == true
+                    ? TarihOku(Al(degerler, "Ödeme Tarihi", "Odeme Tarihi")) ?? DateTime.UtcNow
+                    : null,
                 FaaliyetDetayi = Kirp(Al(degerler, "Faaliyet Detayı", "Faaliyet Detayi"), 2000),
                 NaceKodu = Kirp(Al(degerler, "NACE Faaliyet Kodu", "NACE Kodu"), 20),
                 NaceAdi = Kirp(Al(degerler, "NACE Faaliyet Adı", "NACE Faaliyet Adi"), 500),

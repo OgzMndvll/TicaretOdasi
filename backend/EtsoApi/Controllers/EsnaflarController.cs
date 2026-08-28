@@ -15,7 +15,7 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
         // Çoklu seçime açık süzgeçler dizi olarak gelir: ?durum=Onay Verdi&durum=Kararsız
         [FromQuery] List<string>? durum, [FromQuery] List<string>? uyelikDurumu, [FromQuery] List<int>? grupId,
         [FromQuery] List<int>? gorevliId, [FromQuery] List<int>? gorusenId, [FromQuery] List<string>? ilce,
-        [FromQuery] bool? takipGerekli, [FromQuery] bool? gorusuldu,
+        [FromQuery] bool? takipGerekli, [FromQuery] bool? gorusuldu, [FromQuery] bool? odendi,
         [FromQuery] string? arama, [FromQuery] string? sirala,
         [FromQuery] int sayfa = 1, [FromQuery] int sayfaBoyutu = 20)
     {
@@ -37,6 +37,7 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
                 : sorgu.Where(e => !e.Gorusmeler.Any(g => g.TakipGerekli));
         if (gorusuldu is not null)
             sorgu = gorusuldu.Value ? sorgu.Where(e => e.Gorusmeler.Any()) : sorgu.Where(e => !e.Gorusmeler.Any());
+        if (odendi is not null) sorgu = sorgu.Where(e => e.Odendi == odendi);
         if (Dolu(ilce)) sorgu = sorgu.Where(e => e.Ilce != null && ilce!.Contains(e.Ilce));
         if (!string.IsNullOrWhiteSpace(arama))
             sorgu = sorgu.Where(e => e.AdSoyad.Contains(arama) || e.Isletme.Contains(arama)
@@ -81,6 +82,7 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
                 e.Durum, e.SonGorusmeTarihi, e.KayitTarihi,
                 e.UyeSicilNo, e.TicaretSicilNo, e.SirketTipi, e.Gorevi,
                 e.UyelikDurumu, e.DurumDegisimTarihi, e.DurumDegisimNedeni, e.NaceKodu,
+                e.Odendi, e.OdemeTarihi,
                 // Birden çok imza yetkilisi olan şirketler listede de ayırt edilebilsin diye
                 // yalnızca sayı taşınır; adların tamamı detay ucundan gelir.
                 YetkiliSayisi = e.Yetkililer.Count(),
@@ -116,7 +118,8 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
     public async Task<IActionResult> Istatistik(
         [FromQuery] List<string>? durum, [FromQuery] List<string>? uyelikDurumu, [FromQuery] List<int>? grupId,
         [FromQuery] List<int>? gorevliId, [FromQuery] List<int>? gorusenId, [FromQuery] List<string>? ilce,
-        [FromQuery] bool? takipGerekli, [FromQuery] bool? gorusuldu, [FromQuery] string? arama)
+        [FromQuery] bool? takipGerekli, [FromQuery] bool? gorusuldu, [FromQuery] bool? odendi,
+        [FromQuery] string? arama)
     {
         // Kartlar, listeyle birebir aynı süzgeç kapsamını kullanır.
         var sorgu = db.Esnaflar.AsNoTracking();
@@ -131,6 +134,7 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
                 : sorgu.Where(e => !e.Gorusmeler.Any(g => g.TakipGerekli));
         if (gorusuldu is not null)
             sorgu = gorusuldu.Value ? sorgu.Where(e => e.Gorusmeler.Any()) : sorgu.Where(e => !e.Gorusmeler.Any());
+        if (odendi is not null) sorgu = sorgu.Where(e => e.Odendi == odendi);
         if (Dolu(ilce)) sorgu = sorgu.Where(e => e.Ilce != null && ilce!.Contains(e.Ilce));
         if (!string.IsNullOrWhiteSpace(arama))
             sorgu = sorgu.Where(e => e.AdSoyad.Contains(arama) || e.Isletme.Contains(arama)
@@ -188,6 +192,7 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
             esnaf.Uyruk, esnaf.Sermaye, esnaf.Derece, esnaf.VergiDairesi, esnaf.VergiTerkTarihi,
             esnaf.KurulusTarihi, esnaf.OdaKararTarihi, esnaf.Gorevi,
             esnaf.UyelikDurumu, esnaf.DurumDegisimTarihi, esnaf.DurumDegisimNedeni,
+            esnaf.Odendi, esnaf.OdemeTarihi,
             esnaf.FaaliyetDetayi, esnaf.NaceKodu, esnaf.NaceAdi,
             Yetkililer = esnaf.Yetkililer.Select(y => new { y.Id, y.AdSoyad, y.Gorevi, y.YetkiBaslangic, y.YetkiBitis }),
             Gorusmeler = esnaf.Gorusmeler.Select(g => new
@@ -262,9 +267,9 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
     }
 
     /// <summary>
-    /// Yalnızca üyelik durumunu (Faal / Askı / Pasif) değiştirir. Üye kartındaki "Düzenle"
-    /// düğmesi bu ucu kullanır: tam gövde beklemediği için kaydın geri kalanı — istemci ne
-    /// gönderirse göndersin — değişmez.
+    /// Yalnızca üyelik durumunu (Faal / Askı / Pasif) ve ödeme bilgisini değiştirir. Üye
+    /// kartındaki "Düzenle" düğmesi bu ucu kullanır: tam gövde beklemediği için kaydın geri
+    /// kalanı — istemci ne gönderirse göndersin — değişmez.
     /// </summary>
     [HttpPut("{id:int}/uyelik-durumu")]
     public async Task<IActionResult> UyelikDurumunuGuncelle(int id, EsnafUyelikDurumuDto dto)
@@ -274,11 +279,25 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
 
         var esnaf = await db.Esnaflar.FindAsync(id);
         if (esnaf is null) return NotFound();
-        if (esnaf.UyelikDurumu == dto.UyelikDurumu) return NoContent();
 
-        esnaf.UyelikDurumu = dto.UyelikDurumu;
-        // Durumun ne zaman değiştiği raporlarda aranıyor; elle girilmez, değişiklikle birlikte damgalanır.
-        esnaf.DurumDegisimTarihi = DateTime.UtcNow;
+        var degisti = false;
+        if (esnaf.UyelikDurumu != dto.UyelikDurumu)
+        {
+            esnaf.UyelikDurumu = dto.UyelikDurumu;
+            // Durumun ne zaman değiştiği raporlarda aranıyor; elle girilmez, değişiklikle birlikte damgalanır.
+            esnaf.DurumDegisimTarihi = DateTime.UtcNow;
+            degisti = true;
+        }
+        // Alan gönderilmediyse (null) mevcut ödeme bilgisi korunur.
+        if (dto.Odendi is not null && esnaf.Odendi != dto.Odendi.Value)
+        {
+            esnaf.Odendi = dto.Odendi.Value;
+            // İşaret kaldırıldığında tarih de silinir; aksi halde "ödenmedi ama ödeme tarihi var" kalırdı.
+            esnaf.OdemeTarihi = dto.Odendi.Value ? DateTime.UtcNow : null;
+            degisti = true;
+        }
+        if (!degisti) return NoContent();
+
         await db.SaveChangesAsync();
         await canli.DegistiAsync("esnaf", esnaf.Id);
         return NoContent();
@@ -304,7 +323,12 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
         "Vergi Dairesi", "Vergi No", "Kuruluş Tarihi", "Üye Kayıt Tarihi",
         "İş Telefonu", "Cep Telefonu (GSM)", "İl", "İlçe", "Mahalle", "Adres",
         "NACE Faaliyet Kodu", "NACE Faaliyet Adı", "Faaliyet Detayı", "Görevli", "Onay Durumu",
+        "Ödeme Durumu", "Ödeme Tarihi",
     ];
+
+    /// <summary>Ödeme bilgisinin Excel'deki iki değeri. Boş hücre "bilinmiyor" sayılır, kaydı değiştirmez.</summary>
+    public const string OdendiMetni = "Ödendi";
+    public const string OdenmediMetni = "Ödenmedi";
 
     /// <summary>Süzgeç dizisi gerçekten değer taşıyor mu (boş dizi "süzme yok" demektir).</summary>
     private static bool Dolu<T>(List<T>? deger) => deger is { Count: > 0 };
@@ -356,7 +380,7 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
                 "Aziziye V.D.", "1234567890", "20/12/1978", "09/05/1979",
                 "4422130092", "5426442075", "Erzurum", "Yakutiye", "Lalapaşa", "Örnek Mah. Örnek Cad. No: 1",
                 "47.52.02", "Hırdavat (nalburiye) ve el aletleri perakende ticareti", "İNŞAAT MALZEMELERİ TİCARETİ.",
-                "Ahmet Yılmaz", "Görüşülmedi",
+                "Ahmet Yılmaz", "Görüşülmedi", "Ödenmedi", "",
             ],
         };
         var dosya = ExcelServisi.Olustur("Üyeler", ExcelBasliklari, ornek);
@@ -368,7 +392,8 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
     public async Task<IActionResult> DisaAktar(
         [FromQuery] List<string>? durum, [FromQuery] List<string>? uyelikDurumu, [FromQuery] List<int>? grupId,
         [FromQuery] List<int>? gorevliId, [FromQuery] List<int>? gorusenId, [FromQuery] List<string>? ilce,
-        [FromQuery] bool? takipGerekli, [FromQuery] bool? gorusuldu, [FromQuery] string? arama)
+        [FromQuery] bool? takipGerekli, [FromQuery] bool? gorusuldu, [FromQuery] bool? odendi,
+        [FromQuery] string? arama)
     {
         var sorgu = db.Esnaflar.AsNoTracking().Include(e => e.Grup).Include(e => e.Gorevli).AsQueryable();
         // Aynı süzgeçte birden çok değer VEYA, farklı süzgeçler VE ile birleşir:
@@ -385,6 +410,7 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
                 : sorgu.Where(e => !e.Gorusmeler.Any(g => g.TakipGerekli));
         if (gorusuldu is not null)
             sorgu = gorusuldu.Value ? sorgu.Where(e => e.Gorusmeler.Any()) : sorgu.Where(e => !e.Gorusmeler.Any());
+        if (odendi is not null) sorgu = sorgu.Where(e => e.Odendi == odendi);
         if (Dolu(ilce)) sorgu = sorgu.Where(e => e.Ilce != null && ilce!.Contains(e.Ilce));
         if (!string.IsNullOrWhiteSpace(arama))
             sorgu = sorgu.Where(e => e.AdSoyad.Contains(arama) || e.Isletme.Contains(arama)
@@ -401,6 +427,7 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli) : Control
             e.VergiDairesi, e.VergiNo, e.KurulusTarihi, e.KayitTarihi,
             e.IsTelefonu, e.Telefon, e.Il, e.Ilce, e.Mahalle, e.Adres,
             e.NaceKodu, e.NaceAdi, e.FaaliyetDetayi, e.Gorevli?.AdSoyad, e.Durum,
+            e.Odendi ? OdendiMetni : OdenmediMetni, e.OdemeTarihi,
         });
         var dosya = ExcelServisi.Olustur("Üyeler", ExcelBasliklari, satirlar);
         return File(dosya, ExcelServisi.IcerikTipi, $"uyeler-{DateTime.Now:yyyyMMdd-HHmm}.xlsx");

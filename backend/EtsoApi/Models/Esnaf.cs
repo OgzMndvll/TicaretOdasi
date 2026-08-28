@@ -22,6 +22,16 @@ public class Esnaf
     public DateTime? DurumDegisimTarihi { get; set; }
     public string? DurumDegisimNedeni { get; set; }
 
+    /// <summary>
+    /// Üyenin borcunu ödeyip ödemediği. Üyelik durumuyla birlikte, üye kartındaki "Düzenle"
+    /// ekranından işaretlenir: askıdaki bir üye ödemesini yapınca hem "Faal"a alınır hem de
+    /// burası işaretlenir. Üyelik durumundan bağımsız tutulur; ödeme yapmış ama henüz faale
+    /// alınmamış (ya da tersi) üyeler de kaydedilebilsin.
+    /// </summary>
+    public bool Odendi { get; set; }
+    /// <summary>Ödemenin işaretlendiği an. Elle girilmez; işaretle birlikte damgalanır.</summary>
+    public DateTime? OdemeTarihi { get; set; }
+
     public string? FaaliyetDetayi { get; set; }
     public string? NaceKodu { get; set; }
     public string? NaceAdi { get; set; }

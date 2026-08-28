@@ -57,8 +57,9 @@ tr.satir-red:hover{background:color-mix(in srgb,var(--red) 16%,transparent)}
 .esnaf-secici-panel ul li b{font-size:12.5px}
 .esnaf-secici-panel ul li small{color:#7a8699;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
 .esnaf-secici-dip{margin:0;padding:8px 12px;border-top:1px solid #eef2f8;background:#f8faff;color:#7a8699;font-size:11.5px}
-/* Modal alt butonları: her zaman aynı hizada */
-.action-form footer{align-items:center}
+/* Modal alt butonları: her zaman aynı hizada. Son alana yapışık durmasınlar diye
+   üstten ayrılır; ince çizgi form alanlarıyla eylemleri görsel olarak da ayırır. */
+.action-form footer{align-items:center;margin-top:26px;padding-top:18px;border-top:1px solid var(--line)}
 .action-form footer .primary-button,.action-form footer .secondary-button{margin-top:0;height:40px;font-size:12px}
 /* Filtre kartı: ferah ve okunur */
 .filter-search div,.filter-select select,.date-filter{height:42px;border-radius:6px}
@@ -730,6 +731,7 @@ tr.satir-onayli .badge,tr.satir-red .badge,tr.satir-kararsiz .badge{box-shadow:0
   .form-field input,.form-field textarea,.form-field select{height:calc(40px * var(--o));font-size:calc(12px * var(--o))}
   .form-field textarea{height:calc(80px * var(--o))}
   .primary-button,.secondary-button,.danger-button{height:calc(38px * var(--o));font-size:calc(11px * var(--o))}
+  .action-form footer{margin-top:calc(26px * var(--o));padding-top:calc(18px * var(--o))}
   .action-form footer .primary-button,.action-form footer .secondary-button{height:calc(40px * var(--o));font-size:calc(12px * var(--o))}
   .dark-button{height:calc(38px * var(--o));font-size:calc(12px * var(--o))}
   .security-note{font-size:calc(10px * var(--o))}
