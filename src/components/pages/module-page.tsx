@@ -84,13 +84,14 @@ type DetayIstegi = {
  * Süzgeç değerlerini sorgu dizesine çevirir. Çoklu seçimler "a,b" biçiminde tutulur ve
  * tekrarlı parametreye açılır (?durum=A&durum=B) — sunucu bunları VEYA olarak işler.
  */
-function sorguParametreleri(secimler: Record<string, string>, arama: string): URLSearchParams {
+function sorguParametreleri(secimler: Record<string, string>, arama: string, yetkili = ""): URLSearchParams {
   const params = new URLSearchParams();
   Object.entries(secimler).forEach(([anahtar, deger]) => {
     if (!deger || anahtar === "seviye") return;
     deger.split(",").filter(Boolean).forEach(tek => params.append(anahtar, tek));
   });
   if (arama.trim()) params.set("arama", arama.trim());
+  if (yetkili.trim()) params.set("yetkili", yetkili.trim());
   return params;
 }
 
@@ -128,6 +129,7 @@ export function ModulePage({ kind }: { kind: PageKind }) {
   const [sayfa, setSayfa] = useState(1);
   const [sayfaBoyutu, setSayfaBoyutu] = useState(20);
   const [arama, setArama] = useState("");
+  const [yetkiliArama, setYetkiliArama] = useState("");
   const [filtreler, setFiltreler] = useState<Record<string, string>>({});
   const [yenileme, setYenileme] = useState(0);
 
@@ -184,7 +186,7 @@ export function ModulePage({ kind }: { kind: PageKind }) {
 
   // Liste verisi
   useEffect(() => {
-    const params = sorguParametreleri({ ...page.tabs[tab].filtre, ...filtreler }, arama);
+    const params = sorguParametreleri({ ...page.tabs[tab].filtre, ...filtreler }, arama, yetkiliArama);
     params.set("sayfa", String(sayfa));
     params.set("sayfaBoyutu", String(sayfaBoyutu));
 
@@ -221,7 +223,7 @@ export function ModulePage({ kind }: { kind: PageKind }) {
     }
     yukle();
     return () => { iptal = true; };
-  }, [kind, tab, sayfa, sayfaBoyutu, arama, filtreler, yenileme, canliYenileme, page.tabs]);
+  }, [kind, tab, sayfa, sayfaBoyutu, arama, yetkiliArama, filtreler, yenileme, canliYenileme, page.tabs]);
 
   // İstatistikler + görevli performansı. Üye kartları listeyle aynı aktif süzgeçleri kullanır.
   useEffect(() => {
@@ -495,7 +497,7 @@ export function ModulePage({ kind }: { kind: PageKind }) {
   const sayfaSayisi = kind === "gruplar" || kind === "calisanlar" ? 1 : Math.max(1, Math.ceil(toplam / sayfaBoyutu));
 
   const disaAktarYolu = kind === "esnaflar"
-    ? `/api/esnaflar/disa-aktar?${sorguParametreleri({ ...page.tabs[tab].filtre, ...filtreler }, arama)}`
+    ? `/api/esnaflar/disa-aktar?${sorguParametreleri({ ...page.tabs[tab].filtre, ...filtreler }, arama, yetkiliArama)}`
     // Çalışan raporu süzgeç almıyor: uç tüm kullanıcıları tek listede verir.
     : kind === "calisanlar" ? "/api/kullanicilar/disa-aktar"
     : null;
@@ -503,9 +505,9 @@ export function ModulePage({ kind }: { kind: PageKind }) {
   const yonetici = yoneticiMi();
   const sistemYoneticisi = sistemYoneticisiMi();
   const etkinFiltreler = { ...page.tabs[tab].filtre, ...filtreler };
-  const filtreAktif = !!arama.trim() || Object.values(etkinFiltreler).some(Boolean);
+  const filtreAktif = !!arama.trim() || !!yetkiliArama.trim() || Object.values(etkinFiltreler).some(Boolean);
   const seciliGrupSayisi = (etkinFiltreler.grupId ?? "").split(",").filter(Boolean).length;
-  const filtreleriTemizle = () => { setArama(""); setFiltreler({}); setSayfa(1); setTab(0); };
+  const filtreleriTemizle = () => { setArama(""); setYetkiliArama(""); setFiltreler({}); setSayfa(1); setTab(0); };
 
   // Şeritte seçili görünecek çip: tek bir onay durumu etkinse odur (sekmeden de gelse süzgeçten de).
   const etkinDurumlar = (etkinFiltreler.durum ?? "").split(",").filter(Boolean);
@@ -546,6 +548,8 @@ export function ModulePage({ kind }: { kind: PageKind }) {
           filters={filtreTanimlari}
           searchValue={arama}
           onSearch={d => { setSayfa(1); setArama(d); }}
+          yetkiliValue={yetkiliArama}
+          onYetkili={d => { setSayfa(1); setYetkiliArama(d); }}
           onReset={filtreleriTemizle}
         />
       </div>
@@ -571,6 +575,8 @@ export function ModulePage({ kind }: { kind: PageKind }) {
       filters={filtreTanimlari}
       searchValue={kind === "esnaflar" ? arama : undefined}
       onSearch={kind === "esnaflar" ? d => { setSayfa(1); setArama(d); } : undefined}
+      yetkiliValue={kind === "esnaflar" ? yetkiliArama : undefined}
+      onYetkili={kind === "esnaflar" ? d => { setSayfa(1); setYetkiliArama(d); } : undefined}
       onReset={filtreleriTemizle}
       // İçe/dışa aktarma hem üye hem çalışan ekranında süzgeç şeridinden erişilebilir;
       // çalışanlarda önceden yalnızca sayfa altındaki "Hızlı İşlemler" kutusundaydı ve gözden kaçıyordu.

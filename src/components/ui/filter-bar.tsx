@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, RotateCcw, Search } from "lucide-react";
+import { Plus, RotateCcw, Search, UserSearch } from "lucide-react";
 import { CokluSecim } from "./coklu-secim";
 
 export interface FiltreSecim {
@@ -13,12 +13,15 @@ export interface FiltreSecim {
   coklu?: boolean;
 }
 
-export function FilterBar({ action, onAction, filters = [], searchValue, onSearch, onReset, extra, ekAlanlar }: {
+export function FilterBar({ action, onAction, filters = [], searchValue, onSearch, yetkiliValue, onYetkili, onReset, extra, ekAlanlar }: {
   action?: string;
   onAction?: () => void;
   filters?: FiltreSecim[];
   searchValue?: string;
   onSearch?: (deger: string) => void;
+  /** Yalnızca yetkili kişinin adı soyadıyla arama (şirket unvanına bakmaz). */
+  yetkiliValue?: string;
+  onYetkili?: (deger: string) => void;
   onReset?: () => void;
   extra?: React.ReactNode;
   /** Açılır listelerin yanına giren serbest alanlar (ör. tarih aralığı girdileri). */
@@ -29,6 +32,11 @@ export function FilterBar({ action, onAction, filters = [], searchValue, onSearc
       <input maxLength={100} placeholder="Üye adı, unvan, telefon..." aria-label="Ara"
         value={searchValue ?? ""} onChange={e => onSearch(e.target.value)} />
       <Search size={18} />
+    </div></label>}
+    {onYetkili && <label className="filter-search"><span>Yetkili Adı Soyadı</span><div>
+      <input maxLength={100} placeholder="Örn. Ahmet Yılmaz" aria-label="Yetkili adı soyadı"
+        value={yetkiliValue ?? ""} onChange={e => onYetkili(e.target.value)} />
+      <UserSearch size={18} />
     </div></label>}
     {filters.map(filtre => filtre.coklu
       ? <div key={filtre.label} className="filter-select"><span>{filtre.label}</span>

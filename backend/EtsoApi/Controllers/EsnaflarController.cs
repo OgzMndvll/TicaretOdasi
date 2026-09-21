@@ -16,7 +16,7 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli, IslemGunl
         [FromQuery] List<string>? durum, [FromQuery] List<string>? uyelikDurumu, [FromQuery] List<int>? grupId,
         [FromQuery] List<int>? gorevliId, [FromQuery] List<int>? gorusenId, [FromQuery] List<string>? ilce,
         [FromQuery] bool? takipGerekli, [FromQuery] bool? gorusuldu, [FromQuery] bool? odendi,
-        [FromQuery] string? arama, [FromQuery] string? sirala,
+        [FromQuery] string? arama, [FromQuery] string? yetkili, [FromQuery] string? sirala,
         [FromQuery] int sayfa = 1, [FromQuery] int sayfaBoyutu = 20)
     {
         // Onay durumu süzgeci bilerek en sona bırakılır: üstteki durum kartları, durum dışındaki
@@ -43,7 +43,9 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli, IslemGunl
             sorgu = sorgu.Where(e => e.AdSoyad.Contains(arama) || e.Isletme.Contains(arama)
                 || (e.Telefon != null && e.Telefon.Contains(arama))
                 || (e.UyeSicilNo != null && e.UyeSicilNo.Contains(arama))
-                || (e.TicaretSicilNo != null && e.TicaretSicilNo.Contains(arama)));
+                || (e.TicaretSicilNo != null && e.TicaretSicilNo.Contains(arama))
+                || e.Yetkililer.Any(y => y.AdSoyad.Contains(arama)));
+        sorgu = YetkiliSuz(sorgu, yetkili);
 
         // Liste toplamı ve üstteki durum kartları aynı sorgudan, aynı anda hesaplanır.
         // Böylece grup/çalışan/ilçe gibi bir süzgeç değiştiğinde tablo ile kartlar ayrışamaz.
@@ -119,7 +121,7 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli, IslemGunl
         [FromQuery] List<string>? durum, [FromQuery] List<string>? uyelikDurumu, [FromQuery] List<int>? grupId,
         [FromQuery] List<int>? gorevliId, [FromQuery] List<int>? gorusenId, [FromQuery] List<string>? ilce,
         [FromQuery] bool? takipGerekli, [FromQuery] bool? gorusuldu, [FromQuery] bool? odendi,
-        [FromQuery] string? arama)
+        [FromQuery] string? arama, [FromQuery] string? yetkili)
     {
         // Kartlar, listeyle birebir aynı süzgeç kapsamını kullanır.
         var sorgu = db.Esnaflar.AsNoTracking();
@@ -140,7 +142,9 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli, IslemGunl
             sorgu = sorgu.Where(e => e.AdSoyad.Contains(arama) || e.Isletme.Contains(arama)
                 || (e.Telefon != null && e.Telefon.Contains(arama))
                 || (e.UyeSicilNo != null && e.UyeSicilNo.Contains(arama))
-                || (e.TicaretSicilNo != null && e.TicaretSicilNo.Contains(arama)));
+                || (e.TicaretSicilNo != null && e.TicaretSicilNo.Contains(arama))
+                || e.Yetkililer.Any(y => y.AdSoyad.Contains(arama)));
+        sorgu = YetkiliSuz(sorgu, yetkili);
 
         var gruplu = await sorgu.GroupBy(e => e.Durum)
             .Select(g => new { Durum = g.Key, Adet = g.Count() }).ToListAsync();
@@ -345,6 +349,24 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli, IslemGunl
     private static bool Dolu<T>(List<T>? deger) => deger is { Count: > 0 };
 
     /// <summary>
+    /// Yetkili adı soyadı süzgeci: birincil yetkili (Esnaf.AdSoyad) ya da oda kaydındaki
+    /// herhangi bir yetkili eşleşirse üye listeye girer. Kelimeler sırayla aranır, arada başka
+    /// kelime olabilir: "mehmet kaya" → "Mehmet Ali Kaya". Kolon harmanlaması (0900_ai_ci)
+    /// büyük/küçük harfi ve ö/ç/ş/ğ/ü/İ farkını zaten yok sayar; yalnızca "ı" ile "i" ayrı
+    /// harf sayıldığı için ikisi de "i"ye indirilir ("yilmaz" → "Yılmaz").
+    /// </summary>
+    private static IQueryable<Esnaf> YetkiliSuz(IQueryable<Esnaf> sorgu, string? yetkili)
+    {
+        if (string.IsNullOrWhiteSpace(yetkili)) return sorgu;
+        var kelimeler = yetkili.Trim().Replace('ı', 'i')
+            .Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_")
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var desen = $"%{string.Join('%', kelimeler)}%";
+        return sorgu.Where(e => EF.Functions.Like(e.AdSoyad.Replace("ı", "i"), desen)
+            || e.Yetkililer.Any(y => EF.Functions.Like(y.AdSoyad.Replace("ı", "i"), desen)));
+    }
+
+    /// <summary>
     /// Üyenin onay durumu. En güncel görüşmenin sonucundan gelir, bu yüzden görüşme sonucu
     /// seçenekleriyle ("Takip Edilecek", "Gelmeyecek" dahil) aynı listedir; ek olarak hiç
     /// görüşülmemiş üyeler için "Görüşülmedi" değerini taşır.
@@ -404,7 +426,7 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli, IslemGunl
         [FromQuery] List<string>? durum, [FromQuery] List<string>? uyelikDurumu, [FromQuery] List<int>? grupId,
         [FromQuery] List<int>? gorevliId, [FromQuery] List<int>? gorusenId, [FromQuery] List<string>? ilce,
         [FromQuery] bool? takipGerekli, [FromQuery] bool? gorusuldu, [FromQuery] bool? odendi,
-        [FromQuery] string? arama)
+        [FromQuery] string? arama, [FromQuery] string? yetkili)
     {
         var sorgu = db.Esnaflar.AsNoTracking().Include(e => e.Grup).Include(e => e.Gorevli).AsQueryable();
         // Aynı süzgeçte birden çok değer VEYA, farklı süzgeçler VE ile birleşir:
@@ -427,7 +449,9 @@ public class EsnaflarController(EtsoDbContext db, CanliBildirim canli, IslemGunl
             sorgu = sorgu.Where(e => e.AdSoyad.Contains(arama) || e.Isletme.Contains(arama)
                 || (e.Telefon != null && e.Telefon.Contains(arama))
                 || (e.UyeSicilNo != null && e.UyeSicilNo.Contains(arama))
-                || (e.TicaretSicilNo != null && e.TicaretSicilNo.Contains(arama)));
+                || (e.TicaretSicilNo != null && e.TicaretSicilNo.Contains(arama))
+                || e.Yetkililer.Any(y => y.AdSoyad.Contains(arama)));
+        sorgu = YetkiliSuz(sorgu, yetkili);
 
         var kayitlar = await sorgu.OrderBy(e => e.Isletme).ToListAsync();
         var satirlar = kayitlar.Select(e => new object?[]
